@@ -312,20 +312,20 @@ models:
 small-mcs51-stack-auto:
 	if grep '^mcs51$$' $(top_builddir)/ports.build > /dev/null; then \
 	  mkdir -p small-stack-auto; cp small/Makefile small-stack-auto; \
-	  $(MAKE) MODELFLAGS="--model-small --stack-auto" PORT=small-stack-auto PORTDIR=$(BUILDDIR)/small-stack-auto PORTINCDIR=$(INCDIR)/mcs51 objects || exit 1; \
+	  $(MAKE) MODELFLAGS="--model-small --stack-auto --stack-probe" PORT=small-stack-auto PORTDIR=$(BUILDDIR)/small-stack-auto PORTINCDIR=$(INCDIR)/mcs51 objects || exit 1; \
 	fi
 
 large-mcs51-stack-auto:
 	if grep '^mcs51$$' $(top_builddir)/ports.build > /dev/null; then \
 	  mkdir -p large-stack-auto; cp small/Makefile large-stack-auto; \
-	  $(MAKE) MODELFLAGS="--model-large --stack-auto" PORT=large-stack-auto PORTDIR=$(BUILDDIR)/large-stack-auto PORTINCDIR=$(INCDIR)/mcs51 objects || exit 1; \
+	  $(MAKE) MODELFLAGS="--model-large --stack-auto --stack-probe" PORT=large-stack-auto PORTDIR=$(BUILDDIR)/large-stack-auto PORTINCDIR=$(INCDIR)/mcs51 objects || exit 1; \
 	fi
 
 model-mcs51-stack-auto:
 	if grep '^mcs51$$' $(top_builddir)/ports.build > /dev/null; then \
 	  for model in $(MODELS); do \
 	    mkdir -p $${model}-stack-auto; cp $${model}/Makefile $${model}-stack-auto; \
-	    $(MAKE) MODELFLAGS="--model-$$model --stack-auto" PORT=$${model}-stack-auto PORTDIR=$(BUILDDIR)/$${model}-stack-auto PORTINCDIR=$(INCDIR)/mcs51 objects || exit 1; \
+	    $(MAKE) MODELFLAGS="--model-$$model --stack-auto --stack-probe" PORT=$${model}-stack-auto PORTDIR=$(BUILDDIR)/$${model}-stack-auto PORTINCDIR=$(INCDIR)/mcs51 objects || exit 1; \
 	  done \
 	fi
 
