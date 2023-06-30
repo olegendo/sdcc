@@ -660,6 +660,7 @@ struct  area
         a_uint  a_addr;         /* Beginning address of area */
         a_uint  a_size;         /* Total size of the area */
         int     a_bset;         /* Area base address set */
+        a_uint  a_base_addr;    /* Area base address (as it was originally set) */
 /* sdld specific */
         a_uint  a_unaloc;       /* Total number of unallocated bytes, for error reporting */
 /* end sdld specific */
@@ -1115,6 +1116,9 @@ extern  int     sflag;          /*      JCF: Memory usage output flag
                                  */
 extern  int     stacksize;      /*      Stack size
                                  */
+
+extern int      aflag;          /*      Overlapping area warning flag
+                                */
 extern int      rflag;          /*      Extended linear address record flag.
                                 */
 extern  a_uint iram_size;       /*      internal ram size
@@ -1198,6 +1202,8 @@ extern  VOID            lkparea(char *id);
 extern  VOID            lnkarea(void);
 extern  VOID            lnkarea2(void);
 extern  VOID            newarea(void);
+extern  VOID            dump_areas (FILE *of, struct area *areap, int match_flag);
+extern  int             check_area_overlaps (struct area *areap, int match_flag);
 
 /* lkbank.c */
 extern  VOID            chkbank(FILE *fp);
