@@ -18051,6 +18051,57 @@ Infineon
  XC800 series microcontrollers to keep its Memory Extension Stack balanced.
 \end_layout
 
+
+\begin_layout Labeling
+\labelwidthstring 00.00.0000
+
+\series bold
+-
+\begin_inset ERT
+status collapsed
+
+\begin_layout Plain Layout
+
+
+\backslash
+/
+\end_layout
+
+\end_inset
+
+-stack-probe
+\series default
+
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset Index idx
+status collapsed
+
+\begin_layout Plain Layout
+-
+\begin_inset ERT
+status collapsed
+
+\begin_layout Plain Layout
+
+
+\backslash
+/
+\end_layout
+
+\end_inset
+
+-stack-probe
+\end_layout
+
+\end_inset
+
+Inserts stack pointer checks in each function prologue.
+ If the check fails, it will call the function __stack_probe_err.
+\end_layout
+
 \begin_layout Subsection
 DS390 / DS400 Options
 \begin_inset Index idx

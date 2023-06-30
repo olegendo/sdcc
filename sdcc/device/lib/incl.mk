@@ -155,7 +155,8 @@ COMMON_SDCC = \
   __stdc_first_trailing_oneull.c \
   __stdc_count_onesull.c \
   __stdc_bit_widthull.c \
-  __stdc_bit_ceilull.c
+  __stdc_bit_ceilull.c \
+  _stack_probe_err.c
 
 MODELS = small medium large huge
 

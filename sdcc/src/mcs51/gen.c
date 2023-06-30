@@ -4098,6 +4098,21 @@ genFunction (iCode * ic)
   emitcode (";", " function %s", sym->name);
   emitcode (";", "-----------------------------------------");
 
+  /* For stack-probing, insert code that will usually not jump and fall-through
+     as straight-line code into the function epilogue/body.  This reduces the
+     performance penalty on systems where jumps are expensive.  If the
+     check fails, make it jump backwards above the function label.
+     The __stack_probe_err function can get the failing instruction pointer
+     for diagnostics by popping the return address off the stack. */
+  const bool use_stack_probe = options.stack_probe && !IFFUNC_ISNAKED (ftype);
+
+  if (use_stack_probe)
+    {
+      emitcode ("", "%s_stack_probe_err:", sym->rname);
+      genLine.lineCurr->isLabel = 1;
+      emitcode ("lcall", "__stack_probe_err");
+    }
+
   emitcode ("", "%s:", sym->rname);
   genLine.lineCurr->isLabel = 1;
   _G.currentFunc = sym;
@@ -4449,43 +4464,145 @@ genFunction (iCode * ic)
       freereg = "r0";
     }
 
+  /* For the following stack adjustment and stack probing code don't set
+     the iCode.  If set, it will have the iCode op set to 'FUNCTION' and
+     that will make the push/pop elimination in genEndFunction prematurely
+     stop its scanning for push insns and it will thus wrongly eliminate pop
+     insns.  */
+  genLine.lineElement.ic = NULL;
+
+  if (use_stack_probe)
+    {
+      /* Check if the stack pointer has wrapped around and is now less
+         than __start__stack.
+         FIXME: This assumes 256 byte IRAM and stack end addr = 0xFF.  */
+
+      int acc_pushed = 0;
+
+      if (!accIsFree && freereg == NULL)
+        {
+          emitcode ("push", "acc");
+          acc_pushed = 1;
+        }
+      else if (!accIsFree && freereg != NULL)
+          emitcode ("xch", "a,%s", freereg);
+
+      /* Carry flag is undefined at function entry.  Could also use addition
+         operation to avoid the 'clr c' and check the inverse carry condition,
+         but that would require the assembler/linker to support a relocation
+         calculation like '#0 - __start_stack'  */
+      emitcode ("clr", "c");
+      emitcode ("mov", "a,sp");
+      emitcode ("subb", "a,#__start__stack - %d", acc_pushed ? 0 : 1);
+      emitcode ("jc", "%s_stack_probe_err", sym->rname);
+
+      if (!stackAdjust)
+        {
+          /* Restore the accumulator now as there will be no further check.  */
+          if (!accIsFree && freereg == NULL)
+            emitcode ("pop", "acc");
+          else if (!accIsFree && freereg != NULL)
+            emitcode ("xch", "a,%s", freereg);
+        }
+    }
+
+
   /* adjust the stack for the function */
   if (stackAdjust)
     {
       unsigned int i = stackAdjust & 0xffu;
-      if (stackAdjust > 256)
+
+      /* Min. 'sp' address is 8 (first free byte after reg bank 0).
+         Thus max. stack adjust ever possible is '256 - 8 = 248.'  */
+      if (stackAdjust > 248)
         werror (W_STACK_OVERFLOW, sym->name);
 
-      if (i > 3 && accIsFree)
+      if (use_stack_probe)
         {
-          emitcode ("mov", "a,sp");
-          emitcode ("add", "a,#!constbyte", i);
-          emitcode ("mov", "sp,a");
-        }
-      else if (i > 4 && freereg)
-        {
-          emitcode ("xch", "a,%s", freereg);
-          emitcode ("mov", "a,sp");
-          emitcode ("add", "a,#!constbyte", i);
-          emitcode ("mov", "sp,a");
-          emitcode ("xch", "a,%s", freereg);
-        }
-      else if (i > 7)
-        {
-          emitcode ("push", "acc");
-          emitcode ("mov", "a,sp");
-          emitcode ("push", "ar0");
-          emitcode ("mov", "r0,a");
-          emitcode ("add", "a,#!constbyte", i-1);
-          emitcode ("xch", "a,@r0");
-          emitcode ("pop", "ar0");
-          emitcode ("pop", "sp");
+          /* 'a' already contains 'sp - (stack_start - 1)' from above.  */
+          emitcode ("add", "a,#(__start__stack - 1 + !constbyte)", i & 0xffu);
+          emitcode ("jc", "%s_stack_probe_err", sym->rname);
+
+          if (accIsFree)
+            {
+              emitcode ("mov", "sp,a");
+            }
+          else if (freereg != NULL)
+            {
+              /* 'a' saved in 'freereg'  */
+              emitcode ("mov", "sp,a");
+              emitcode ("xch", "a,%s", freereg);
+            }
+          else
+            {
+              /* 'a' saved on stack, i.e. sp is already +1 here.  */
+              if (i > 5)
+                {
+                  emitcode ("xch", "a,r0");    /* push 'r0'  */
+                  emitcode ("push", "acc");
+                  emitcode ("xch", "a,r0");
+
+                  emitcode ("mov", "r0,sp");
+                  emitcode ("dec", "r0");      /* @r0 points to previously pushed 'a'  */
+
+                  emitcode ("xch", "a,@r0");   /* restore 'a' and write new 'sp' value  */
+
+                  emitcode ("xch", "a,r0");    /* pop 'r0'  */
+                  emitcode ("pop", "acc");
+                  emitcode ("xch", "a,r0");
+
+                  emitcode ("pop", "sp");      /* total code emitted: 18 bytes  */
+                }
+              else
+                {
+                  emitcode ("pop", "acc");
+                  while (i--)
+                    emitcode ("inc", "sp");    /* total code emitted: <= 16 bytes  */
+                }
+            }
         }
       else
         {
-          // do it the hard way
-          while (i--)
-            emitcode ("inc", "sp");
+          if (i > 3 && accIsFree)
+            {
+              emitcode ("mov", "a,sp");
+              emitcode ("add", "a,#!constbyte", i & 0xffu);
+              emitcode ("mov", "sp,a");
+            }
+          else if (i > 4 && freereg)
+            {
+              emitcode ("xch", "a,%s", freereg);
+              emitcode ("mov", "a,sp");
+              emitcode ("add", "a,#!constbyte", i & 0xffu);
+              emitcode ("mov", "sp,a");
+              emitcode ("xch", "a,%s", freereg);
+            }
+          else if (i > 8)
+            {
+	      /* N.B. don't use ar0 to stay register bank invariant */
+              emitcode ("push", "acc");
+              emitcode ("mov", "a,sp");
+
+              emitcode ("xch", "a,r0");    /* push 'r0'  */
+              emitcode ("push", "acc");
+              emitcode ("mov", "a,r0");    /* 'a' = 'r0' = original 'sp' + 1  */
+
+              emitcode ("add", "a,#!constbyte", (i - 1) & 0xffu);  /* 'i - 1' for the first 'push acc'  */
+
+              emitcode ("xch", "a,@r0");   /* restore pushed 'a', write new 'sp' value  */
+
+              emitcode ("xch", "a,r0");    /* pop 'r0'  */
+              emitcode ("pop", "acc");
+              emitcode ("xch", "a,r0");
+
+              emitcode ("pop", "sp");      /* total code emitted: 17 bytes  */
+            }
+          else
+            {
+              // do it the hard way
+              while (i--)
+                emitcode ("inc", "sp");   /* total code emitted: <= 16 bytes  */
+            }
         }
     }
 
@@ -4524,6 +4641,7 @@ genFunction (iCode * ic)
 
   bool bigreturn = IS_STRUCT (ftype->next);
 
+  genLine.lineElement.ic = ic;
   _G.stack.param_offset = options.useXstack ? _G.stack.xpushed : _G.stack.pushed;
   _G.stack.param_offset += (!options.useXstack && bigreturn) * 3;
   _G.stack.pushedregs = _G.stack.pushed;
