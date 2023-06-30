@@ -171,7 +171,8 @@ COMMON_SDCC = \
   stdc_memreverse8.c \
   stdc_memreverse8u.c \
   stdc_load8.c \
-  stdc_store8.c
+  stdc_store8.c \
+  _stack_probe_err.c
 
 MODELS = small medium large huge
 
