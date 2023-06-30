@@ -332,6 +332,7 @@ struct options
     bool oldralloc;             /* Use old register allocator */
     int sdcccall;               /* ABI version */
     bool allow_undoc_inst;      /* Allow the use of undocumented instructions */
+    bool dual_dptr;             /* enable support for dual DPTR */
   };
 
 /* forward definition for variables accessed globally */
