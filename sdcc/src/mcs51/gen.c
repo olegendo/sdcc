@@ -3380,6 +3380,8 @@ genCall (iCode * ic)
     }
 
   /* make the call */
+  const char* callinsn = IFFUNC_ISNORETURN (dtype) ? "ljmp" : "lcall";
+
   if (IFFUNC_ISBANKEDCALL (dtype))
     {
       if (IFFUNC_CALLEESAVES (dtype))
@@ -3402,19 +3404,20 @@ genCall (iCode * ic)
               emitcode ("mov", "r1,#(%s >> 8)", name);
               emitcode ("mov", "r2,#(%s >> 16)", name);
             }
-          emitcode ("lcall", "__sdcc_banked_call");
+
+          emitcode (callinsn, "__sdcc_banked_call");
         }
     }
   else
     {
       if (IS_LITERAL (etype))
         {
-          emitcode ("lcall", "0x%04X", ulFromVal (OP_VALUE (IC_LEFT (ic))));
+          emitcode (callinsn, "0x%04X", ulFromVal (OP_VALUE (IC_LEFT (ic))));
         }
       else
         {
-          emitcode ("lcall", "%s", (OP_SYMBOL (IC_LEFT (ic))->rname[0] ?
-                                    OP_SYMBOL (IC_LEFT (ic))->rname : OP_SYMBOL (IC_LEFT (ic))->name));
+          emitcode (callinsn, "%s", (OP_SYMBOL (IC_LEFT (ic))->rname[0] ?
+                                     OP_SYMBOL (IC_LEFT (ic))->rname : OP_SYMBOL (IC_LEFT (ic))->name));
         }
     }
 
