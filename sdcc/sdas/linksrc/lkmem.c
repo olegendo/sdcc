@@ -42,7 +42,7 @@ int summary(struct area * areap)
         fprintf(stderr, "%s%s",(H)?"\n?ASlink-Warning-":"", (A)); \
     }
 
-    char buff[128];
+    char buff[8192];
     int j, toreturn=0;
     unsigned int Total_Last=0, k;
 
@@ -484,7 +484,7 @@ int summary2(struct area * areap)
 
     /*Artifacts used for printing*/
     char start[15], end[15], size[15], max[15];
-    char format[]="   %-16.16s %-8.8s %-8.8s %-8.8s %-8.8s\n";
+    char format[]="   %-16.16s %-12.12s %-12.12s %-12.12s %-12.12s\n";
     char line[]="---------------------";
 
     typedef struct
@@ -641,7 +641,7 @@ int summary2(struct area * areap)
     {
         Stack_Start = xstack_xp->a_addr;
         Stack_Size = xstack_xp->a_size;
-        fprintf(of, "\nXstack starts at: 0x%04lx with %ld bytes available.",
+        fprintf(of, "\nXstack starts at: 0x%06lx with %ld bytes available.",
             Stack_Start, Stack_Size);
     }
 
@@ -657,8 +657,8 @@ int summary2(struct area * areap)
     }
     else
     {
-        sprintf(start, "0x%04lx", Paged.Start);
-        sprintf(end,  "0x%04lx", Paged.End-1);
+        sprintf(start, "0x%06lx", Paged.Start);
+        sprintf(end,  "0x%06lx", Paged.End-1);
     }
     sprintf(size, "%5lu", Paged.Size);
     sprintf(max, "%5lu", xram_size<0 ? Paged.Max : xram_size<256 ? xram_size : 256);
@@ -672,8 +672,8 @@ int summary2(struct area * areap)
     }
     else
     {
-        sprintf(start, "0x%04lx", XRam.Start);
-        sprintf(end,  "0x%04lx", XRam.End-1);
+        sprintf(start, "0x%06lx", XRam.Start);
+        sprintf(end,  "0x%06lx", XRam.End-1);
     }
     sprintf(size, "%5lu", XRam.Size);
     sprintf(max, "%5lu", xram_size<0?XRam.Max:xram_size);
@@ -687,12 +687,15 @@ int summary2(struct area * areap)
     }
     else
     {
-        sprintf(start, "0x%04lx", Rom.Start);
-        sprintf(end,  "0x%04lx", Rom.End-1);
+        sprintf(start, "0x%06lx", Rom.Start);
+        sprintf(end,  "0x%06lx", Rom.End-1);
     }
     sprintf(size, "%5lu", Rom.Size);
     sprintf(max, "%5lu", code_size<0?Rom.Max:code_size);
     fprintf(of, format, Rom.Name, start, end, size, max);
+
+    fprintf(of, "\nCODE Areas\n");
+    dump_areas (of, areap, A_CODE);
 
     /*Report any excess:*/
     if( ((XRam.End) > XRam.Max) ||

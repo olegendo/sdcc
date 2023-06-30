@@ -4936,6 +4936,9 @@
           -M   Generate memory usage summary file[mem]
           -Y   Pack internal ram
           -S   [stack-size] Allocate space for stack
+          -a   Check for code area overlaps
+          -r   Use extended linear address records
+
           -E   ELF executable as file[elf]
 
         THE LINKER                                              PAGE 3-5

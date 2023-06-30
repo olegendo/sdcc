@@ -169,7 +169,7 @@ int     sflag;          /*      JCF: Memory usage output flag
 			 */
 int     stacksize=0;    /*      JCF: Stack size
 			 */
-int     aflag;          /*      Overlapping area warning flag
+int     aflag=0;        /*      Overlapping area warning flag
 			 */
 int     rflag;          /*      Extended linear address record flag.
 			 */
