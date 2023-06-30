@@ -42,6 +42,7 @@ static char _defaultRules[] =
 #define OPTION_LARGE_MODEL          "--model-large"
 #define OPTION_HUGE_MODEL           "--model-huge"
 #define OPTION_STACK_SIZE           "--stack-size"
+#define OPTION_DUAL_DPTR            "--dual-dptr"
 
 static OPTION _mcs51_options[] =
   {
@@ -50,6 +51,7 @@ static OPTION _mcs51_options[] =
     { 0, OPTION_LARGE_MODEL, NULL, "external data space is used"},
     { 0, OPTION_HUGE_MODEL, NULL, "functions are banked, data in external space"},
     { 0, OPTION_STACK_SIZE,  &options.stack_size, "Tells the linker to allocate this space for stack", CLAT_INTEGER },
+    { 0, OPTION_DUAL_DPTR, &options.dual_dptr, "Enable support for dual DPTR" },
     { 0, "--acall-ajmp",     &options.acall_ajmp, "Use acall/ajmp instead of lcall/ljmp" },
     { 0, "--no-ret-without-call", &options.no_ret_without_call, "Do not use ret independent of acall/lcall" },
     { 0, NULL }
@@ -145,6 +147,13 @@ _mcs51_parseOptions (int *pargc, char **argv, int *i)
   /* TODO: allow port-specific command line options to specify
    * segment names here.
    */
+
+  if (strcmp (argv[*i], OPTION_DUAL_DPTR) == 0)
+    {
+      options.dual_dptr = true;
+      return true;
+    }
+
   return FALSE;
 }
 
@@ -193,6 +202,7 @@ _mcs51_finaliseOptions (void)
 static void
 _mcs51_setDefaultOptions (void)
 {
+  options.dual_dptr = false;
 }
 
 static const char *
