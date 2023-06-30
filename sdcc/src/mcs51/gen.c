@@ -3894,9 +3894,17 @@ genFunction (iCode * ic)
       if (!inExcludeList ("b"))
         emitpush ("b");
       if (!inExcludeList ("dpl"))
+      {
+        if (options.dual_dptr)
+          emitpush ("_DPL1");
         emitpush ("dpl");
+      }
       if (!inExcludeList ("dph"))
+      {
+        if (options.dual_dptr)
+          emitpush ("_DPH1");
         emitpush ("dph");
+      }
       /* if this isr has no bank i.e. is going to
          run with bank 0 , then we need to save more
          registers :-) */
@@ -4468,9 +4476,17 @@ genEndFunction (iCode * ic)
         }
 
       if (!inExcludeList ("dph"))
+      {
         emitpop ("dph");
+        if (options.dual_dptr)
+          emitpop ("_DPH1");
+      }
       if (!inExcludeList ("dpl"))
+      {
         emitpop ("dpl");
+        if (options.dual_dptr)
+          emitpop ("_DPL1");
+      }
       if (!inExcludeList ("b"))
         emitpop ("b");
       if (!inExcludeList ("acc"))
