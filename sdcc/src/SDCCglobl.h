@@ -337,6 +337,7 @@ struct options
     bool allow_undoc_inst;      /* Allow the use of undocumented instructions */
 //    int xdata_overlay;          /* Place the overlay in 16-bit addressable memory to conserve ZP space */
     int xdata_spill;            /* Place the register spills in 16-bit addressable memory */
+    bool dual_dptr;             /* enable support for dual DPTR */
   };
 
 /* forward definition for variables accessed globally */
