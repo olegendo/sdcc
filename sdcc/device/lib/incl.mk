@@ -131,7 +131,8 @@ COMMON_SDCC = \
   puts.c \
   gets.c \
   __assert.c \
-  time.c
+  time.c \
+  _stack_probe_err.c
 
 MODELS = small medium large huge
 
