@@ -459,6 +459,7 @@ lnkarea(void)
                                 else {
                                         ap->a_addr = rloc[locIndex];
                                 }
+                                ap->a_base_addr = ap->a_addr;
                                 ap->a_bset = 1;
                         }
                         lnksect(ap);
@@ -536,7 +537,8 @@ a_uint find_empty_space(a_uint start, a_uint size, char *id, unsigned long *map,
                 mask = -(1 << (start & 0x1F));
 
                 if (j > map_size) {
-                        fprintf(stderr, "internal memory limit is exceeded for %s; memory size = 0x%06X, address = 0x%06X\n", id, map_size << 5, start + size - 1);
+                        fprintf(stderr, "?ASlink-Error-Internal memory limit is exceeded for %s; memory size = 0x%06X, address = 0x%06X\n", id, map_size << 5, start + size - 1);
+                        lkerr++;
                         break;
                 }
                 else {
@@ -585,12 +587,14 @@ a_uint allocate_space(a_uint start, a_uint size, char *id, unsigned long *map,  
         map_size /= sizeof(*map); /* Convert from bytes to number of elements */
 
         if (j > map_size) {
-                fprintf(stderr, "internal memory limit is exceeded for %s; memory size = 0x%06X, address = 0x%06X\n", id, map_size << 5, start + size - 1);
+                fprintf(stderr, "?ASlink-Error-Internal memory limit is exceeded for %s; memory size = 0x%06X, address = 0x%06X\n", id, map_size << 5, start + size - 1);
+                lkerr++;
         }
         else {
                 while (i < j) {
                         if (map[i] & mask) {
-                                fprintf(stderr, "memory overlap near 0x%X for %s\n", a, id);
+                                fprintf(stderr, "?ASlink-Error-Memory overlap near 0x%X for %s\n", a, id);
+                                lkerr++;
                         }
                         map[i++] |= mask;
                         mask = 0xFFFFFFFF;
@@ -598,7 +602,8 @@ a_uint allocate_space(a_uint start, a_uint size, char *id, unsigned long *map,  
                 }
                 mask &= (1 << ((start + size) & 0x1F)) - 1;
                 if (i < map_size && map[i] & mask) {
-                        fprintf(stderr, "memory overlap near 0x%X for %s\n", a, id);
+                        fprintf(stderr, "?ASlink-Error-Memory overlap near 0x%X for %s\n", a, id);
+                        lkerr++;
                 }
                 map[i] |= mask;
         }
@@ -763,7 +768,7 @@ setarea(void)
                                 "ASlink-Warning-No definition of area %s\n", id);
                                 lkerr++;
                         } else {
-                                ap->a_addr = v;
+                                ap->a_addr = ap->a_base_addr = v;
                                 ap->a_bset = 1;
                         }
                 } else {
@@ -892,7 +897,7 @@ VOID lnkarea2 (void)
                 {
                         if (ap->a_bset == 0)
                         {
-                                ap->a_addr = rloc[locIndex];
+                                ap->a_addr = ap->a_base_addr = rloc[locIndex];
                                 ap->a_bset = 1;
                         }
 
@@ -1161,8 +1166,10 @@ a_uint lnksect2 (struct area *tap, int locIndex)
                                 {
                                         if (idatamap[j] == ' ')
                                                 idatamap[j] = 'A';
-                                        else
-                                                fprintf(stderr, "memory overlap at 0x%X for %s\n", j, tap->a_id);
+                                        else {
+                                                fprintf(stderr, "?ASlink-Error-Memory overlap at 0x%X for %s\n", j, tap->a_id);
+                                                lkerr++;
+                                        }
                                 }
                         }
                         else if (locIndex == 1)
@@ -1310,5 +1317,105 @@ a_uint lnksect2 (struct area *tap, int locIndex)
         }
         return addr;
 }
+
+static int cmp_area_addr (const void* a, const void* b)
+{
+  return   ( *(const struct area**)a)->a_addr < ( *(const struct area**)b)->a_addr ? -1
+         : ( *(const struct area**)a)->a_addr > ( *(const struct area**)b)->a_addr ? 1
+         : 0;
+}
+
+struct areas_array
+{
+  struct area** data;
+  unsigned int  size;
+};
+
+static struct areas_array make_sorted_areas (struct area *areap, int match_flag)
+{
+  struct areas_array r;
+  r.size = 0;
+
+  for (struct area *it = areap; it; it = it->a_ap)
+    if (it->a_flag & match_flag)
+      ++r.size;
+
+  r.data = malloc (sizeof (struct area*) * r.size);
+  struct area** areas_i = r.data;
+
+  for (struct area *it = areap; it; it = it->a_ap)
+    if (it->a_flag & match_flag)
+      *areas_i++ = it;
+
+  qsort (r.data, r.size, sizeof (struct area*), cmp_area_addr);
+
+  return r;
+}
+
+static void free_areas_array (struct areas_array *a)
+{
+  free (a->data);
+  a->data = NULL;
+}
+
+static a_uint area_end_addr (const struct area *a)
+{
+  return a->a_addr + (a->a_size > 0 ? (a->a_size - 1) : 0);
+}
+
+VOID dump_areas (FILE *of, struct area *areap, int match_flag)
+{
+  struct areas_array areas = make_sorted_areas (areap, match_flag);
+
+  const char format[] = "   %-16.16s %-12.12s %-12.12s %-12.12s %-12.12s\n";
+  const char line[] = "---------------------";
+
+  fprintf (of, format, "Name", "Set Start", "Start", "End", "Size");
+  fprintf (of, format, line, line, line, line, line);
+
+  for (unsigned int i = 0; i < areas.size; ++i)
+  {
+    char set_start[15], start[15], end[15], size[15];
+
+    sprintf (set_start, "0x%06x", areas.data[i]->a_base_addr);
+    sprintf (start, "0x%06x", areas.data[i]->a_addr);
+    sprintf (end, "0x%06x", area_end_addr (areas.data[i]));
+    sprintf (size, "%u", areas.data[i]->a_size);
+
+    fprintf (of, format, areas.data[i]->a_id, set_start, start, end, size);
+  }
+
+  free_areas_array (&areas);
+}
+
+int check_area_overlaps (struct area *areap, int match_flag)
+{
+  int r = 0;
+
+  struct areas_array areas = make_sorted_areas (areap, match_flag);
+
+  for (unsigned int i = 1; i < areas.size; ++i)
+  {
+    a_uint prev_size  = areas.data[i - 1]->a_size;
+    a_uint prev_end   = area_end_addr (areas.data[i - 1]);
+
+    a_uint cur_start = areas.data[i]->a_base_addr;
+
+    if (prev_end >= cur_start && prev_size > 0)
+    {
+      fprintf (stderr, "?ASlink-Error-Areas %s and %s have %u overlapping bytes.\n",
+               areas.data[i - 1]->a_id, areas.data[i]->a_id,
+               prev_end - cur_start + 1);
+
+      r = 1;
+      break;
+    }
+  }
+
+  free_areas_array (&areas);
+  return r;
+}
+
+
 /* end sdld specific */
 

@@ -451,6 +451,13 @@ main(int argc, char *argv[])
                                 "(%uW max)\n", rom / 2, max_rom / 2);
                 }
         }
+
+        if (aflag && is_sdld_target_8051_like()) {
+                if (check_area_overlaps (areap, A_CODE)) {
+                        lkexit(1);
+                }
+        }
+
         if (TARGET_IS_8051) {
                 //JCF:
                 CreateAOMF51();
@@ -1037,6 +1044,14 @@ parse()
                                         jflag = 1;
                                         break;
 #endif
+
+                                case 'a':
+                                case 'A':
+                                        if (is_sdld() && !(TARGET_IS_Z80 || TARGET_IS_GB))
+                                                aflag = 1;
+                                        else
+                                                goto err;
+                                        break;
 
                                 case 'r':
                                 case 'R':
@@ -1764,6 +1779,8 @@ char *usetxt_8051[] = {
         "  -C   [code-size] Check for code overflow",
         "  -M   Generate memory usage summary file[.mem]",
         "  -S   [stack-size] Allocate space for stack",
+        "  -a   Check for code area overlaps",
+        "  -r   Use extended linear address records",
         "End:",
         "  -e   or null line terminates input",
         "",
@@ -1810,6 +1827,8 @@ char *usetxt_6808[] = {
         "  -X   [xram-size] Check for external RAM overflow",
         "  -C   [code-size] Check for code overflow",
         "  -M   Generate memory usage summary file[.mem]",
+        "  -a   Check for code area overlaps",
+        "  -r   Use extended linear address records",
         "End:",
         "  -e   or null line terminates input",
         "",
