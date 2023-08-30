@@ -3184,15 +3184,15 @@ genSend (set * sendSet)
           if (AOP_TYPE (IC_LEFT (sic)) == AOP_LIT)
             {
               if (((int) operandLitValue (IC_LEFT (sic))))
-                emitcode ("setb", "b[%d]", bit);
+                emitcode ("setb", "b.%d", bit);
               else
-                emitcode ("clr", "b[%d]", bit);
+                emitcode ("clr", "b.%d", bit);
             }
           else
             {
               /* we need to or */
               toCarry (IC_LEFT (sic));
-              emitcode ("mov", "b[%d],c", bit);
+              emitcode ("mov", "b.%d,c", bit);
             }
           bit_count++;
           BitBankUsed = 1;
@@ -8668,7 +8668,7 @@ genGetAbit (iCode * ic)
       else if ((shCount) == 0)
         emitcode ("rrc", "a");
       else
-        emitcode ("mov", "c,acc[%d]", shCount);
+        emitcode ("mov", "c,acc.%d", shCount);
       outBitC (result);
     }
   else
@@ -8686,7 +8686,7 @@ genGetAbit (iCode * ic)
           break;
         case 3:
         case 5:
-          emitcode ("mov", "c,acc[%d]", shCount);
+          emitcode ("mov", "c,acc.%d", shCount);
           emitcode ("clr", "a");
           emitcode ("rlc", "a");
           break;
