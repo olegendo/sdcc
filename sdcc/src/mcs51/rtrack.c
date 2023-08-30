@@ -239,26 +239,6 @@ static void invalidateAll()
   rtrack_data_unset (A_IDX);
 }
 
-
-static int regidxfromregname (const char* const s)
-{
-  unsigned int i;
-
-  for (i = 0; i < END_IDX; i++)
-    {
-       if (regs8051[i].name)
-         if (!strncmp (s, regs8051[i].name, strlen(regs8051[i].name)))
-            return i;
-
-       if (regs8051[i].dname)
-         if (!strncmp (s, regs8051[i].dname, strlen(regs8051[i].dname)))
-            return i;
-    }
-
-  return -1;
-}
-
-
 static int valuefromliteral (const char* const s)
 {
   char* tmp = NULL;
@@ -307,7 +287,7 @@ bool _mcs51_rtrackUpdate (const char *line)
       /* mov to register (r0..r7, dpl, dph, a, b)*/
       if (!strncmp (line, "mov\t", 4))
         {
-          int regIdx = regidxfromregname (line + 4);
+          int regIdx = mcs51_regname_to_idx (line + 4);
 
           if (0 <= regIdx)
             {
@@ -361,9 +341,9 @@ bool _mcs51_rtrackUpdate (const char *line)
                   rtrack_data_set_symbol (regIdx, argument + 1);
                 }
               /* check mov from register to register */
-              else if (0 <= regidxfromregname (argument))
+              else if (0 <= mcs51_regname_to_idx (argument))
                 {
-                  rtrack_data_copy_dst_src (regIdx, regidxfromregname (argument));
+                  rtrack_data_copy_dst_src (regIdx, mcs51_regname_to_idx (argument));
                 }
               else
                 {
@@ -562,7 +542,7 @@ bool _mcs51_rtrackUpdate (const char *line)
 
   if (!strncmp (line, "pop\t", 4))
     {
-      int regIdx = regidxfromregname (line + 4);
+      int regIdx = mcs51_regname_to_idx (line + 4);
       if (0 <= regIdx)
         {
           rtrack_data_unset (regIdx);
@@ -597,7 +577,7 @@ bool _mcs51_rtrackUpdate (const char *line)
         }
       if (!strncmp (line, "inc\t", 4))
         {
-          int regIdx = regidxfromregname (line + 4);
+          int regIdx = mcs51_regname_to_idx (line + 4);
           if (0 <= regIdx)
             {
               if (regs8051[regIdx].rtrack.valueKnown)
@@ -634,7 +614,7 @@ bool _mcs51_rtrackUpdate (const char *line)
      r2 is known to be 8 */
   if (!strncmp (line, "cjne\t", 5))
     {
-      int regIdx = regidxfromregname (line + 5);
+      int regIdx = mcs51_regname_to_idx (line + 5);
       if (0 <= regIdx)
         {
           char *argument = strstr (line, ",") + 1;
@@ -667,7 +647,7 @@ bool _mcs51_rtrackUpdate (const char *line)
 
   if (!strncmp (line, "djnz\t", 5))
     {
-      int regIdx = regidxfromregname (line + 5);
+      int regIdx = mcs51_regname_to_idx (line + 5);
       if (0 <= regIdx)
         {
           rtrack_data_set_val (regIdx, 0x00); // branch not taken
@@ -711,7 +691,7 @@ bool _mcs51_rtrackUpdate (const char *line)
         {
           if (!strncmp (line, "add\ta,", 6))
             {
-              int regIdx = regidxfromregname (line + 6);
+              int regIdx = mcs51_regname_to_idx (line + 6);
 
               if (0 <= regIdx && regs8051[regIdx].rtrack.valueKnown)
                 {
@@ -727,7 +707,7 @@ bool _mcs51_rtrackUpdate (const char *line)
 
           if (!strncmp (line, "anl\ta,", 6))
             {
-              int regIdx = regidxfromregname (line + 6);
+              int regIdx = mcs51_regname_to_idx (line + 6);
 
               if (0 <= regIdx && regs8051[regIdx].rtrack.valueKnown)
                 {
@@ -743,7 +723,7 @@ bool _mcs51_rtrackUpdate (const char *line)
 
           if (!strncmp (line, "orl\ta,", 6))
             {
-              int regIdx = regidxfromregname (line + 6);
+              int regIdx = mcs51_regname_to_idx (line + 6);
 
               if (0 <= regIdx && regs8051[regIdx].rtrack.valueKnown)
                 {
@@ -759,7 +739,7 @@ bool _mcs51_rtrackUpdate (const char *line)
 
           if (!strncmp (line, "xrl\ta,", 6))
             {
-              int regIdx = regidxfromregname (line + 6);
+              int regIdx = mcs51_regname_to_idx (line + 6);
 
               if (0 <= regIdx && regs8051[regIdx].rtrack.valueKnown)
                 {
@@ -791,7 +771,7 @@ bool _mcs51_rtrackUpdate (const char *line)
 
   if (!strncmp (line, "dec\t", 4))
     {
-      int regIdx = regidxfromregname (line + 4);
+      int regIdx = mcs51_regname_to_idx (line + 4);
       if (0 <= regIdx)
         {
           if (regs8051[regIdx].rtrack.valueKnown)
@@ -925,7 +905,7 @@ bool _mcs51_rtrackUpdate (const char *line)
   if (!strncmp (line, "xch\ta,", 6))
     {
       /* handle xch from register (r0..r7, dpl, dph, b) */
-      int regIdx = regidxfromregname (line + 6);
+      int regIdx = mcs51_regname_to_idx (line + 6);
       if (0 <= regIdx)
         {
           void* swap = Safe_malloc (sizeof regs8051[A_IDX].rtrack);
