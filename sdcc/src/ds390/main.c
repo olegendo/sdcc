@@ -1549,6 +1549,7 @@ PORT tininative_port =
     NULL,
     NULL,
     NULL,
+    NULL,
   },
   /* Sizes: char, short, int, long, long long, near ptr, far ptr, gptr, func ptr, banked func ptr, bit, float, _BitInt (in bits) */
   { 1, 2, 2, 4, 8, 1, 3, 3, 3, 3, 1, 4, 64 },

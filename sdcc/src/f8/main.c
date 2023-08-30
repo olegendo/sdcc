@@ -438,6 +438,7 @@ PORT f8_port =
     NULL,
     NULL,
     NULL,
+    NULL,
   },
   /* Sizes: char, short, int, long, long long, ptr, fptr, gptr, bit, float, max */
   {

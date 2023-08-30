@@ -494,6 +494,7 @@ PORT stm8_port =
     NULL,
     NULL,
     NULL,
+    NULL,
   },
   /* Sizes */
   {
