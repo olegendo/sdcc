@@ -1389,3 +1389,27 @@ printAllocInfo (symbol * func, struct dbuf_s * oBuf)
   if (cnt)
     dbuf_append_str (oBuf, BREAKLINE);
 }
+
+/*-----------------------------------------------------------------*/
+/* findSFRSymbolAddress - tries to find the address of the symbol  */
+/*-----------------------------------------------------------------*/
+int findSFRSymbolAddress (const char *op)
+{
+  for (symbol* sym = setFirstItem (sfr->syms); sym; sym = setNextItem (sfr->syms))
+    if (!strcmp (sym->rname, op))
+      return SPEC_ADDR (sym->etype);
+
+  return -1;
+}
+
+/*--------------------------------------------------------------------*/
+/* findSFRBitSymbolAddress - tries to find the address of the symbol  */
+/*--------------------------------------------------------------------*/
+int findSFRBitSymbolAddress (const char *op)
+{
+  for (symbol* sym = setFirstItem (sfrbit->syms); sym; sym = setNextItem (sfrbit->syms))
+    if (!strcmp (sym->rname, op))
+      return SPEC_ADDR (sym->etype);
+
+  return -1;
+}
