@@ -498,57 +498,79 @@ typedef struct mcs51operanddata
     char name[6];
     int regIdx1;
     int regIdx2;
+    int sfrAddr;
   }
 mcs51operanddata;
 
 static mcs51operanddata mcs51operandDataTable[] =
   {
-    {"a",    A_IDX,   -1},
-    {"ab",   A_IDX,   B_IDX},
-    {"ac",   CND_IDX, -1},
-    {"acc",  A_IDX,   -1},
-    {"ar0",  R0_IDX,  -1},
-    {"ar1",  R1_IDX,  -1},
-    {"ar2",  R2_IDX,  -1},
-    {"ar3",  R3_IDX,  -1},
-    {"ar4",  R4_IDX,  -1},
-    {"ar5",  R5_IDX,  -1},
-    {"ar6",  R6_IDX,  -1},
-    {"ar7",  R7_IDX,  -1},
-    {"b",    B_IDX,   -1},
-    {"b0",   B0_IDX,  BITS_IDX},
-    {"b1",   B1_IDX,  BITS_IDX},
-    {"b2",   B2_IDX,  BITS_IDX},
-    {"b3",   B3_IDX,  BITS_IDX},
-    {"b4",   B4_IDX,  BITS_IDX},
-    {"b5",   B5_IDX,  BITS_IDX},
-    {"b6",   B6_IDX,  BITS_IDX},
-    {"b7",   B7_IDX,  BITS_IDX},
-    {"bits", BITS_IDX, -1},
-    {"c",    CND_IDX, -1},
-    {"cy",   CND_IDX, -1},
-    {"dph",  DPH_IDX, -1},
-    {"dpl",  DPL_IDX, -1},
-    {"dptr", DPL_IDX, DPH_IDX},
-    {"f0",   CND_IDX, -1},
-    {"f1",   CND_IDX, -1},
-    {"ov",   CND_IDX, -1},
-    {"p",    CND_IDX, -1},
-    {"psw",  CND_IDX, -1},
-    {"r0",   R0_IDX,  -1},
-    {"r1",   R1_IDX,  -1},
-    {"r2",   R2_IDX,  -1},
-    {"r3",   R3_IDX,  -1},
-    {"r4",   R4_IDX,  -1},
-    {"r5",   R5_IDX,  -1},
-    {"r6",   R6_IDX,  -1},
-    {"r7",   R7_IDX,  -1},
+    {"a",    A_IDX,   -1, -1},
+    {"ab",   A_IDX,   B_IDX, -1},
+    {"ac",   CND_IDX, -1, -1},
+    {"acc",  A_IDX,   -1, 0xE0},
+    {"ar0",  R0_IDX,  -1, -1},
+    {"ar1",  R1_IDX,  -1, -1},
+    {"ar2",  R2_IDX,  -1, -1},
+    {"ar3",  R3_IDX,  -1, -1},
+    {"ar4",  R4_IDX,  -1, -1},
+    {"ar5",  R5_IDX,  -1, -1},
+    {"ar6",  R6_IDX,  -1, -1},
+    {"ar7",  R7_IDX,  -1, -1},
+    {"b",    B_IDX,   -1, 0xF0},
+    {"b0",   B0_IDX,  BITS_IDX, -1},
+    {"b1",   B1_IDX,  BITS_IDX, -1},
+    {"b2",   B2_IDX,  BITS_IDX, -1},
+    {"b3",   B3_IDX,  BITS_IDX, -1},
+    {"b4",   B4_IDX,  BITS_IDX, -1},
+    {"b5",   B5_IDX,  BITS_IDX, -1},
+    {"b6",   B6_IDX,  BITS_IDX, -1},
+    {"b7",   B7_IDX,  BITS_IDX, -1},
+    {"bits", BITS_IDX, -1, -1},
+    {"c",    CND_IDX, -1, -1},
+    {"cy",   CND_IDX, -1, -1},
+    {"dph",  DPH_IDX, -1, 0x83},
+    {"dpl",  DPL_IDX, -1, 0x82},
+    {"dptr", DPL_IDX, DPH_IDX, -1},
+    {"f0",   CND_IDX, -1, -1},
+    {"f1",   CND_IDX, -1, -1},
+    {"ov",   CND_IDX, -1, -1},
+    {"p",    CND_IDX, -1, -1},
+    {"psw",  CND_IDX, -1, 0xD0},
+    {"r0",   R0_IDX,  -1, -1},
+    {"r1",   R1_IDX,  -1, -1},
+    {"r2",   R2_IDX,  -1, -1},
+    {"r3",   R3_IDX,  -1, -1},
+    {"r4",   R4_IDX,  -1, -1},
+    {"r5",   R5_IDX,  -1, -1},
+    {"r6",   R6_IDX,  -1, -1},
+    {"r7",   R7_IDX,  -1, -1},
   };
+
+static const unsigned int mcs51operandDataTableSize = sizeof(mcs51operandDataTable)/sizeof(mcs51operanddata);
 
 static int
 mcs51operandCompare (const void *key, const void *member)
 {
   return strcmp((const char *)key, ((mcs51operanddata *)member)->name);
+}
+
+static bool
+mcs51isSpecialRegister (const char *op1, const char *reg)
+{
+  for (unsigned int i = 0; i < mcs51operandDataTableSize; ++i)
+    if (mcs51operandDataTable[i].sfrAddr >= 0
+        && !strcmp (reg, mcs51operandDataTable[i].name))
+      {
+        /* either the op1 is the direct known standard name or it could have
+           been setup as an alias with known standard address but different name.  */
+        if (!strcmp (reg, op1))
+          return true;
+
+        if (findSFRSymbolAddress (op1) == mcs51operandDataTable[i].sfrAddr)
+          return true;
+      }
+
+  return false;
 }
 
 static void
@@ -567,9 +589,43 @@ updateOpRW (asmLineNode *aln, const char *op_in, const char *optype)
     *bit_sep = '\0';
   else if (bit_sep = strchr (op, '['))
     *bit_sep = '\0';
-  opdat = bsearch (op, mcs51operandDataTable,
-                   sizeof(mcs51operandDataTable)/sizeof(mcs51operanddata),
+  opdat = bsearch (op, mcs51operandDataTable, mcs51operandDataTableSize,
                    sizeof(mcs51operanddata), mcs51operandCompare);
+
+  if (opdat == NULL)
+  {
+    int sfr_addr = findSFRSymbolAddress (op);
+    if (sfr_addr >= 0)
+      {
+        /* Handle some standard known SFRs, which might be accessed by C
+           code directly.  Checking the SFR addresses is more robust, as
+           the SFR names are usually user defined.  */
+        for (unsigned int ii = 0; ii < mcs51operandDataTableSize; ++ii)
+          if (sfr_addr == mcs51operandDataTable[ii].sfrAddr)
+            {
+              opdat = &mcs51operandDataTable[ii];
+              break;
+            }
+      }
+    else
+      {
+        int sfr_bit_addr = findSFRBitSymbolAddress (op);
+        if (sfr_bit_addr >= 0)
+          {
+            /* If it's a user defined SFR bit address, try to match the
+               known standard SFR address.  */
+            int sfr_byte_addr = (unsigned int)sfr_bit_addr & ~7u;
+
+            for (unsigned int ii = 0; ii < mcs51operandDataTableSize; ++ii)
+              if (sfr_byte_addr == mcs51operandDataTable[ii].sfrAddr)
+                {
+                  opdat = &mcs51operandDataTable[ii];
+                  bit_sep = ".";
+                  break;
+                }
+          }
+      }
+  }
 
   if (opdat && strchr(optype,'r'))
     {
@@ -918,6 +974,7 @@ PORT mcs51_port =
     NULL,
     NULL,
     NULL,
+    mcs51isSpecialRegister,
   },
   /* Sizes: char, short, int, long, long long, near ptr, far ptr, gptr, func ptr, banked func ptr, bit, float, _BitInt (in bits) */
   { 1, 2, 2, 4, 8, 1, 2, 3, 2, 3, 1, 4, 64 },
