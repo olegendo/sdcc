@@ -183,6 +183,7 @@ typedef struct
     bool (*symmParmStack) (const char *name);
     bool (*canJoinRegs) (const char **regs, char dst[20]);
     bool (*canSplitReg) (const char *reg, char dst[][16], int nDst);
+    bool (*isSpecialRegister) (const char *op1, const char *reg);
   }
   peep;
 

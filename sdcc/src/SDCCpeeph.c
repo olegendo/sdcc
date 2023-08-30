@@ -2579,6 +2579,37 @@ FBYNAME (isPort)
   return ret;
 }
 
+
+/*-----------------------------------------------------------------*/
+/* isSpecialRegister - returns true if first operand is a special  */
+/*   register as named by the second operand.                      */
+/*   e.g. on mcs51 ("acc", "acc") would return true.               */
+/*-----------------------------------------------------------------*/
+FBYNAME (isSpecialRegister)
+{
+  set *operands = setFromConditionArgs (cmdLine, vars);
+
+  if (!operands)
+    {
+      fprintf (stderr,
+               "*** internal error: isSpecialRegister peephole restriction"
+               " malformed: %s\n", cmdLine);
+      return false;
+    }
+
+  const char *op2 = setFirstItem (operands);
+  const char *op1 = setNextItem (operands);
+
+  bool ret = false;
+
+  if (port->peep.isSpecialRegister)
+    ret = port->peep.isSpecialRegister (op1, op2);
+
+  deleteSet(&operands);
+  return ret;
+}
+
+
 static const struct ftab
 {
   char *fname;
@@ -2681,6 +2712,9 @@ ftab[] =                                            // sorted on the number of t
   },
   {
     "newLabel", newLabel
+  },
+  {
+    "isSpecialRegister", isSpecialRegister
   },
 };
 
