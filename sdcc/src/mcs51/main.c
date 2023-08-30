@@ -606,55 +606,56 @@ typedef struct mcs51opcodedata
     char pswtype[3];
     char op1type[3];
     char op2type[3];
+    int  implicit_rd_idx;
   }
 mcs51opcodedata;
 
-static mcs51opcodedata mcs51opcodeDataTable[] =
+static const mcs51opcodedata mcs51opcodeDataTable[] =
   {
-    {"acall","j", "",   "",   ""},
-    {"add",  "",  "w",  "rw", "r"},
-    {"addc", "",  "rw", "rw", "r"},
-    {"ajmp", "j", "",   "",   ""},
-    {"anl",  "",  "",   "rw", "r"},
-    {"cjne", "j", "w",  "r",  "r"},
-    {"clr",  "",  "",   "w",  ""},
-    {"cpl",  "",  "",   "rw", ""},
-    {"da",   "",  "rw", "rw", ""},
-    {"dec",  "",  "",   "rw", ""},
-    {"div",  "",  "w",  "rw", ""},
-    {"djnz", "j", "",  "rw",  ""},
-    {"inc",  "",  "",   "rw", ""},
-    {"jb",   "j", "",   "r",  ""},
-    {"jbc",  "j", "",  "rw",  ""},
-    {"jc",   "j", "",   "",   ""},
-    {"jmp",  "j", "",  "",    ""},
-    {"jnb",  "j", "",   "r",  ""},
-    {"jnc",  "j", "",   "",   ""},
-    {"jnz",  "j", "",  "",    ""},
-    {"jz",   "j", "",  "",    ""},
-    {"lcall","j", "",   "",   ""},
-    {"ljmp", "j", "",   "",   ""},
-    {"mov",  "",  "",   "w",  "r"},
-    {"movc", "",  "",   "w",  "r"},
-    {"movx", "",  "",   "w",  "r"},
-    {"mul",  "",  "w",  "rw", ""},
-    {"nop",  "",  "",   "",   ""},
-    {"orl",  "",  "",   "rw", "r"},
-    {"pop",  "",  "",   "w",  ""},
-    {"push", "",  "",   "r",  ""},
-    {"ret",  "j", "",   "",   ""},
-    {"reti", "j", "",   "",   ""},
-    {"rl",   "",  "",   "rw", ""},
-    {"rlc",  "",  "rw", "rw", ""},
-    {"rr",   "",  "",   "rw", ""},
-    {"rrc",  "",  "rw", "rw", ""},
-    {"setb", "",  "",   "w",  ""},
-    {"sjmp", "j", "",   "",   ""},
-    {"subb", "",  "rw", "rw", "r"},
-    {"swap", "",  "",   "rw", ""},
-    {"xch",  "",  "",   "rw", "rw"},
-    {"xchd", "",  "",   "rw", "rw"},
-    {"xrl",  "",  "",   "rw", "r"},
+    {"acall","j", "",   "",   "", -1},
+    {"add",  "",  "w",  "rw", "r", -1},
+    {"addc", "",  "rw", "rw", "r", -1},
+    {"ajmp", "j", "",   "",   "", -1},
+    {"anl",  "",  "",   "rw", "r", -1},
+    {"cjne", "j", "w",  "r",  "r", -1},
+    {"clr",  "",  "",   "w",  "", -1},
+    {"cpl",  "",  "",   "rw", "", -1},
+    {"da",   "",  "rw", "rw", "", -1},
+    {"dec",  "",  "",   "rw", "", -1},
+    {"div",  "",  "w",  "rw", "", -1},
+    {"djnz", "j", "",  "rw",  "", -1},
+    {"inc",  "",  "",   "rw", "", -1},
+    {"jb",   "j", "",   "r",  "", -1},
+    {"jbc",  "j", "",  "rw",  "", -1},
+    {"jc",   "j", "r",   "",   "", -1},
+    {"jmp",  "j", "",  "",    "", -1},
+    {"jnb",  "j", "",   "r",  "", -1},
+    {"jnc",  "j", "r",   "",   "", -1},
+    {"jnz",  "j", "",  "",    "", A_IDX},
+    {"jz",   "j", "",  "",    "", A_IDX},
+    {"lcall","j", "",   "",   "", -1},
+    {"ljmp", "j", "",   "",   "", -1},
+    {"mov",  "",  "",   "w",  "r", -1},
+    {"movc", "",  "",   "w",  "r", -1},
+    {"movx", "",  "",   "w",  "r", -1},
+    {"mul",  "",  "w",  "rw", "", -1},
+    {"nop",  "",  "",   "",   "", -1},
+    {"orl",  "",  "",   "rw", "r", -1},
+    {"pop",  "",  "",   "w",  "", -1},
+    {"push", "",  "",   "r",  "", -1},
+    {"ret",  "j", "",   "",   "", -1},
+    {"reti", "j", "",   "",   "", -1},
+    {"rl",   "",  "",   "rw", "", -1},
+    {"rlc",  "",  "rw", "rw", "", -1},
+    {"rr",   "",  "",   "rw", "", -1},
+    {"rrc",  "",  "rw", "rw", "", -1},
+    {"setb", "",  "",   "w",  "", -1},
+    {"sjmp", "j", "",   "",   "", -1},
+    {"subb", "",  "rw", "rw", "r", -1},
+    {"swap", "",  "",   "rw", "", -1},
+    {"xch",  "",  "",   "rw", "rw", -1},
+    {"xchd", "",  "",   "rw", "rw", -1},
+    {"xrl",  "",  "",   "rw", "r", -1},
   };
 
 static int
@@ -745,6 +746,8 @@ asmLineNodeFromLineNode (lineNode *ln)
         aln->regsRead = bitVectSetBit (aln->regsRead, CND_IDX);
       if (strchr(opdat->pswtype,'w'))
         aln->regsWritten = bitVectSetBit (aln->regsWritten, CND_IDX);
+      if (opdat->implicit_rd_idx >= 0)
+        aln->regsRead = bitVectSetBit (aln->regsRead, opdat->implicit_rd_idx);
     }
 
   return aln;
