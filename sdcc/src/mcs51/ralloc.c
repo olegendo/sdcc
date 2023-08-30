@@ -83,6 +83,7 @@ reg_info regs8051[] = {
   {0, DPH_IDX, 0, "dph", "dph", "0x83", 0, 0},
   {0, B_IDX, 0, "b", "b", "0xf0", 0, 0},
   {0, A_IDX, 0, "a", "acc", "0xe0", 0, 0},
+  {0, BITS_IDX, 0, "bits", "bits", "bits", 0, 0 }
 };
 
 static const char* alt_regnames[] = {
@@ -107,6 +108,7 @@ static const char* alt_regnames[] = {
   NULL, /* DPH_IDX */
   NULL, /* B_IDX */
   NULL, /* A_IDX */
+  NULL, /* BITS_IDX */
 };
 
 int mcs51_nRegs = 16;
