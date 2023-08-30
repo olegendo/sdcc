@@ -3383,6 +3383,28 @@ reassociate_ic (lineNode *shead, lineNode *stail,
       return;
     }
 
+  /* Call patterns with multiple different lines that are going to be
+     replaced will usually not be reassociated successfully.
+     It's handled here as a special case to preserve the register use
+     bits of the original call insn and tailcall flag.  */
+  iCode* call_ic = NULL;
+
+  for (csl=shead;csl!=stail->next;csl=csl->next)
+    if (csl->ic
+        && (csl->ic->op == CALL || csl->ic->op == PCALL || csl->ic->op == RETURN))
+      {
+        call_ic = csl->ic;
+        break;
+      }
+
+  if (call_ic)
+    {
+      for (csl=rhead;csl!=rtail->next;csl=csl->next)
+        csl->ic = call_ic;
+
+      return;
+    }
+
   /* The source lines span iCodes, so we may end up with replacement
   ** lines that we don't know which iCode(s) to associate with. Do the
   ** best we can by using the following strategies:
