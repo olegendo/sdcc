@@ -36,6 +36,8 @@ enum
   X8_IDX, X9_IDX, X10_IDX, X11_IDX,
   X12_IDX, CND_IDX,
   DPL_IDX, DPH_IDX, B_IDX, A_IDX,
+  BITS_IDX,
+
   END_IDX
 };
 
