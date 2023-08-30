@@ -35,6 +35,8 @@ enum
   B4_IDX, B5_IDX, B6_IDX, B7_IDX,
   CND_IDX,
   DPL_IDX, DPH_IDX, B_IDX, A_IDX,
+  BITS_IDX,
+
   END_IDX
 };
 
