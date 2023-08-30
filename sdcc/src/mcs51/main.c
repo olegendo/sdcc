@@ -516,6 +516,15 @@ static mcs51operanddata mcs51operandDataTable[] =
     {"ar6",  R6_IDX,  -1},
     {"ar7",  R7_IDX,  -1},
     {"b",    B_IDX,   -1},
+    {"b0",   B0_IDX,  BITS_IDX},
+    {"b1",   B1_IDX,  BITS_IDX},
+    {"b2",   B2_IDX,  BITS_IDX},
+    {"b3",   B3_IDX,  BITS_IDX},
+    {"b4",   B4_IDX,  BITS_IDX},
+    {"b5",   B5_IDX,  BITS_IDX},
+    {"b6",   B6_IDX,  BITS_IDX},
+    {"b7",   B7_IDX,  BITS_IDX},
+    {"bits", BITS_IDX, -1},
     {"c",    CND_IDX, -1},
     {"cy",   CND_IDX, -1},
     {"dph",  DPH_IDX, -1},
@@ -568,6 +577,18 @@ updateOpRW (asmLineNode *aln, const char *op_in, const char *optype)
         aln->regsRead = bitVectSetBit (aln->regsRead, opdat->regIdx1);
       if (opdat->regIdx2 >= 0)
         aln->regsRead = bitVectSetBit (aln->regsRead, opdat->regIdx2);
+
+      if (!strcmp (op, "bits"))
+        {
+          aln->regsRead = bitVectSetBit (aln->regsRead, B0_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, B1_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, B2_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, B3_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, B4_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, B5_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, B6_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, B7_IDX);
+        }
     }
   if (opdat && strchr(optype,'w'))
     {
@@ -576,12 +597,27 @@ updateOpRW (asmLineNode *aln, const char *op_in, const char *optype)
       if (opdat->regIdx2 >= 0)
         aln->regsWritten = bitVectSetBit (aln->regsWritten, opdat->regIdx2);
 
+      if (!strcmp (op, "bits"))
+        {
+          aln->regsWritten = bitVectSetBit (aln->regsWritten, B0_IDX);
+          aln->regsWritten = bitVectSetBit (aln->regsWritten, B1_IDX);
+          aln->regsWritten = bitVectSetBit (aln->regsWritten, B2_IDX);
+          aln->regsWritten = bitVectSetBit (aln->regsWritten, B3_IDX);
+          aln->regsWritten = bitVectSetBit (aln->regsWritten, B4_IDX);
+          aln->regsWritten = bitVectSetBit (aln->regsWritten, B5_IDX);
+          aln->regsWritten = bitVectSetBit (aln->regsWritten, B6_IDX);
+          aln->regsWritten = bitVectSetBit (aln->regsWritten, B7_IDX);
+        }
+
       /* Any bit access always implies a read of the full register.  */
       if (opdat->regIdx1 == A_IDX && bit_sep)
         aln->regsRead = bitVectSetBit (aln->regsRead, A_IDX);
 
       if (opdat->regIdx1 == B_IDX && bit_sep)
         aln->regsRead = bitVectSetBit (aln->regsRead, B_IDX);
+
+      if (opdat->regIdx1 >= B0_IDX && opdat->regIdx1 <= B7_IDX)
+        aln->regsRead = bitVectSetBit (aln->regsRead, BITS_IDX);
     }
   if (op[0] == '@')
     {
