@@ -128,5 +128,7 @@ void redoStackOffsets (void);
 void printAllocInfo (struct symbol *, struct dbuf_s *);
 void doOverlays (struct eBBlock **, int count);
 void deleteFromSeg(struct symbol *);
+int findSFRSymbolAddress (const char *op);
+int findSFRBitSymbolAddress (const char *op);
 #endif
 

@@ -1336,6 +1336,7 @@ PORT z80_port =
     z80symmParmStack,
     z80canJoinRegs,
     z80canSplitReg,
+    NULL,
   },
   /* Sizes: char, short, int, long, long long, near ptr, far ptr, gptr, func ptr, banked func ptr, bit, float, BitInt (in bits) */
   { 1, 2, 2, 4, 8, 2, 2, 2, 2, 2, 1, 4, 64 },

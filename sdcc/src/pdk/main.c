@@ -301,6 +301,7 @@ PORT pdk13_port =
     0,
     0,
     0,
+    0,
   },
   /* Sizes: char, short, int, long, long long, ptr, fptr, gptr, bit, float, max */
   {
@@ -644,6 +645,9 @@ PORT pdk15_port =
     pdknotUsed,
     0,
     pdknotUsedFrom,
+    0,
+    0,
+    0,
     0,
   },
   /* Sizes: char, short, int, long, long long, ptr, fptr, gptr, bit, float, max */
