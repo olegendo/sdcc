@@ -3408,7 +3408,15 @@ genCall (iCode * ic)
     }
 
   /* make the call */
-  const char* callinsn = IFFUNC_ISNORETURN (dtype) ? "ljmp" : "lcall";
+  const char* callinsn = "lcall";
+  ic->tailcall = false;
+
+  if (IFFUNC_ISNORETURN (dtype))
+    {
+      callinsn = "ljmp";
+      ic->tailcall = true;
+    }
+
 
   if (IFFUNC_ISBANKEDCALL (dtype))
     {

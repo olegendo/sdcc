@@ -5054,7 +5054,7 @@ replace {
 } by {
 	;	Peephole 400.a	replaced lcall/ret with ljmp
 	ljmp	%1
-} if optimizeReturn(), notSame(%1 '_longjmp')
+} if optimizeReturn(), notSame(%1 '_longjmp'), setTailcall(true)
 
 // applies to: void test( char c ) { if( c ) func1(); else func2(); }
 replace {
@@ -5065,7 +5065,7 @@ replace {
 	;	Peephole 400.b	replaced lcall/ret with ljmp
 	ljmp	%1
 	;
-} if optimizeReturn(), notSame(%1 '_longjmp'), labelRefCount(%2 0)
+} if optimizeReturn(), notSame(%1 '_longjmp'), labelRefCount(%2 0), setTailcall(true)
 
 // applies to f.e. scott-bool1.c
 replace {
@@ -5077,7 +5077,7 @@ replace {
 	ljmp	%1
 %2:
 	ret
-} if optimizeReturn(), notSame(%1 '_longjmp')
+} if optimizeReturn(), notSame(%1 '_longjmp'), setTailcall(true)
 
 // for programs less than 2k
 replace {
