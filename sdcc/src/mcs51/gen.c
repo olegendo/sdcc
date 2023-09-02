@@ -117,6 +117,7 @@ static struct
   } stack;
   set *sendSet;
   symbol *currentFunc;
+  bitVect *prevRetUsedRegs;
 }
 _G;
 
@@ -3406,7 +3407,7 @@ unsaveRBank (int bank, iCode * ic, bool popPsw)
 /* genSend - gen code for SEND                                     */
 /*-----------------------------------------------------------------*/
 static void
-genSend (set * sendSet)
+genSend (set * sendSet, iCode *call_ic)
 {
   iCode *sic;
   int bit_count = 0;
@@ -3435,6 +3436,9 @@ genSend (set * sendSet)
               toCarry (IC_LEFT (sic));
               emitcode ("mov", "b.%d,c", bit);
             }
+
+          call_ic->rCallUsed = bitVectSetBit (call_ic->rCallUsed, (B0_IDX + bit));
+
           bit_count++;
           BitBankUsed = 1;
 
@@ -3483,6 +3487,8 @@ genSend (set * sendSet)
                           emitpush ("acc");
                           pushedA = TRUE;
                         }
+
+                      call_ic->rCallUsed = bitVectSetBit (call_ic->rCallUsed, mcs51_regname_to_idx (fReturn[offset]));
                       offset++;
                     }
                   if (pushedA)
@@ -3508,6 +3514,8 @@ genSend (set * sendSet)
                         {
                           emitpop ("acc");
                         }
+
+                      call_ic->rCallUsed = bitVectSetBit (call_ic->rCallUsed, mcs51_regname_to_idx (fReturn[offset]));
                     }
                 }
             }
@@ -3516,6 +3524,9 @@ genSend (set * sendSet)
               while (size--)
                 {
                   emitcode ("mov", "%s,%s", rb1regs[sic->argreg + offset - 5], aopGet (IC_LEFT (sic), offset, FALSE, FALSE));
+
+                  // FIXME: not sure how to handle this.
+                  // call_ic->rCallUsed = bitVectSetBit (call_ic->rCallUsed, mcs51_regname_to_idx (rb1regs[sic->argreg + offset - 5]));
                   offset++;
                 }
             }
@@ -3613,6 +3624,7 @@ genCall (iCode * ic)
   dtype = operandType (IC_LEFT (ic));
   etype = getSpec (dtype);
   const bool bigreturn = IS_STRUCT (dtype->next);
+  ic->rCallUsed = newBitVect (END_IDX);
 
   /* if send set is not empty then assign */
   if (_G.sendSet)
@@ -3620,11 +3632,11 @@ genCall (iCode * ic)
       if (IFFUNC_ISREENT (dtype))
         {
           /* need to reverse the send set */
-          genSend (reverseSet (_G.sendSet));
+          genSend (reverseSet (_G.sendSet), ic);
         }
       else
         {
-          genSend (_G.sendSet);
+          genSend (_G.sendSet, ic);
         }
       _G.sendSet = NULL;
     }
@@ -3679,6 +3691,10 @@ genCall (iCode * ic)
               emitcode ("mov", "r1,#(%s >> 8)", name);
               emitcode ("mov", "r2,#(%s >> 16)", name);
             }
+
+          ic->rCallUsed = bitVectSetBit (ic->rCallUsed, R0_IDX);
+          ic->rCallUsed = bitVectSetBit (ic->rCallUsed, R1_IDX);
+          ic->rCallUsed = bitVectSetBit (ic->rCallUsed, R2_IDX);
 
           emitcode (callinsn, "__sdcc_banked_call");
         }
@@ -3821,6 +3837,8 @@ genPcall (iCode * ic)
 
   D (emitcode (";", "genPcall"));
 
+  ic->rCallUsed = newBitVect (END_IDX);
+
   dtype = operandType (IC_LEFT (ic));
   if (IS_FUNCPTR (dtype))
     dtype = dtype->next;
@@ -3846,7 +3864,7 @@ genPcall (iCode * ic)
       /* if send set is not empty then assign */
       if (_G.sendSet)
         {
-          genSend (reverseSet (_G.sendSet));
+          genSend (reverseSet (_G.sendSet), ic);
           _G.sendSet = NULL;
         }
 
@@ -3874,6 +3892,10 @@ genPcall (iCode * ic)
               emitcode ("mov", "r1,#%s", aopLiteralLong (OP_VALUE (IC_LEFT (ic)), 1, 1));
               emitcode ("mov", "r2,#%s", aopLiteralLong (OP_VALUE (IC_LEFT (ic)), 2, 1));
               emitcode ("lcall", "__sdcc_banked_call");
+
+              ic->rCallUsed = bitVectSetBit (ic->rCallUsed, R0_IDX);
+              ic->rCallUsed = bitVectSetBit (ic->rCallUsed, R1_IDX);
+              ic->rCallUsed = bitVectSetBit (ic->rCallUsed, R2_IDX);
             }
         }
       else
@@ -3909,7 +3931,7 @@ genPcall (iCode * ic)
               /* if send set is not empty then assign */
               if (_G.sendSet)
                 {
-                  genSend (reverseSet (_G.sendSet));
+                  genSend (reverseSet (_G.sendSet), ic);
                   _G.sendSet = NULL;
                 }
 
@@ -3933,6 +3955,10 @@ genPcall (iCode * ic)
                 }
               /* make the call */
               emitcode ("lcall", "__sdcc_banked_call");
+
+              ic->rCallUsed = bitVectSetBit (ic->rCallUsed, R0_IDX);
+              ic->rCallUsed = bitVectSetBit (ic->rCallUsed, R1_IDX);
+              ic->rCallUsed = bitVectSetBit (ic->rCallUsed, R2_IDX);
             }
         }
       else if (_G.sendSet)      /* the send set is not empty */
@@ -3952,7 +3978,7 @@ genPcall (iCode * ic)
           pushSide (IC_LEFT (ic), FARPTRSIZE, ic);
 
           /* send set is not empty: assign */
-          genSend (reverseSet (_G.sendSet));
+          genSend (reverseSet (_G.sendSet), ic);
           _G.sendSet = NULL;
 
           if (swapBanks)
@@ -3998,6 +4024,9 @@ genPcall (iCode * ic)
 
           /* make the call */
           emitcode ("lcall", "__sdcc_call_dptr");
+
+          ic->rCallUsed = bitVectSetBit (ic->rCallUsed, DPH_IDX);
+          ic->rCallUsed = bitVectSetBit (ic->rCallUsed, DPL_IDX);
         }
     }
 
@@ -4682,7 +4711,21 @@ genEndFunction (iCode * ic)
   bitVect *regsUnneeded;
   int idx;
 
+  D (emitcode (";", "genEndFunction"));
+
   _G.currentFunc = NULL;
+
+  /* Set the call used bits to whatever the last genRet has collected.  */
+  freeBitVect (ic->rCallUsed);
+
+  if (_G.prevRetUsedRegs)
+    {
+      ic->rCallUsed = _G.prevRetUsedRegs;
+      _G.prevRetUsedRegs = NULL;
+    }
+  else
+    ic->rCallUsed = newBitVect (END_IDX);
+
   if (IFFUNC_ISNAKED (ftype))
     {
       emitcode (";", "naked function: no epilogue.");
@@ -4901,19 +4944,22 @@ genEndFunction (iCode * ic)
           debugFile->writeEndFunction (currFunc, ic, 1);
         }
 
+      /* ISRs must preserve all registers.  To avoid elimination of any
+         register restores mark them all as call used.  */
+      for (int ridx = 0; ridx < END_IDX; ++ridx)
+        ic->rCallUsed = bitVectSetBit (ic->rCallUsed, ridx);
+
       emitcode ("reti", "");
     }
   else
     {
       if (IFFUNC_CALLEESAVES (ftype))
         {
-          int i;
-
           /* if any registers used */
           if (sym->regsUsed)
             {
               /* save the registers used */
-              for (i = sym->regsUsed->size; i >= 0; i--)
+              for (int i = sym->regsUsed->size; i >= 0; i--)
                 {
                   if (bitVectBitValue (sym->regsUsed, i) || (mcs51_ptrRegReq && (i == R0_IDX || i == R1_IDX)))
                     emitpop (REG_WITH_INDEX (i)->dname);
@@ -4923,7 +4969,16 @@ genEndFunction (iCode * ic)
             {
               emitpop (REG_WITH_INDEX (R1_IDX)->dname);
               emitpop (REG_WITH_INDEX (R0_IDX)->dname);
+              ic->rCallUsed = bitVectSetBit (ic->rCallUsed, R1_IDX);
+              ic->rCallUsed = bitVectSetBit (ic->rCallUsed, R0_IDX);
             }
+
+          /* callee-saves functions are supposed to preserve all registers.
+             If there are any register store insns in the epilogue, those must
+             be preserved.  For that mark them as 'call-used' by the function return.  */
+          static const int idx[] = { R0_IDX, R1_IDX, R2_IDX, R3_IDX, R4_IDX, R5_IDX, R6_IDX, R7_IDX, BITS_IDX };
+          for (unsigned int i = 0; i < sizeof (idx) / sizeof (idx[0]); ++i)
+            ic->rCallUsed = bitVectSetBit (ic->rCallUsed, idx[i]);
         }
 
       if (IFFUNC_ISCRITICAL (ftype))
@@ -5063,6 +5118,15 @@ genRet (iCode * ic)
   bool pushedA = FALSE;
 
   D (emitcode (";", "genRet"));
+
+  /* A function can have multiple returns emitted by 'genRet' before
+     the function is finalized with 'genEndFunction'.
+     All 'genRet' paths except for the last, will load the return values
+     into the regs and jump to the return label.  Later on, optimizations
+     may convert the 'ljmp' insn into a 'sjmp' or 'ret'.  To keep track
+     of the used registers, these jump insns also need to have the 'rCallUsed'
+     set accordingly.  */
+  ic->rCallUsed = newBitVect (END_IDX);
 
   /* if we have no return value then
      just generate the "ret" */
@@ -5208,7 +5272,10 @@ genRet (iCode * ic)
   if (IS_BIT (_G.currentFunc->etype))
     {
       if (!IS_OP_RUONLY (IC_LEFT (ic)))
-        toCarry (IC_LEFT (ic));
+        {
+          toCarry (IC_LEFT (ic));
+          ic->rCallUsed = bitVectSetBit (ic->rCallUsed, CND_IDX);
+        }
     }
   else if (ic->left->aop->type == AOP_REG)
     genCopy (ASMOP_RET, 0, ic->left->aop, 0, size, true);
@@ -5235,6 +5302,8 @@ genRet (iCode * ic)
                   emitpush ("acc");
                   pushedA = TRUE;
                 }
+
+              ic->rCallUsed = bitVectSetBit (ic->rCallUsed, mcs51_regname_to_idx (fReturn[offset]));
               offset++;
             }
         }
@@ -5261,6 +5330,11 @@ jumpret:
     {
       emitcode ("ljmp", "!tlabel", labelKey2num (returnLabel->key));
     }
+
+  /* Pass the 'rCallUsed' onto genEndFunction (effective for the last genRet).  */
+  _G.prevRetUsedRegs = bitVectResize (_G.prevRetUsedRegs, END_IDX);
+  bitVectClear (_G.prevRetUsedRegs);
+  _G.prevRetUsedRegs = bitVectUnion (_G.prevRetUsedRegs, ic->rCallUsed);
 }
 
 /*-----------------------------------------------------------------*/
@@ -12899,6 +12973,7 @@ gen51Code (iCode * lic)
 #endif
 
   _G.currentFunc = NULL;
+  _G.prevRetUsedRegs = NULL;
 
   /* print the allocation information */
   if (allocInfo && currFunc)
