@@ -287,10 +287,18 @@ termScanAtFunc (const lineNode *pl, int rIdx)
 /*    S4O_TERM                                                     */
 /*       acall, lcall, ret and reti "terminate" a scan.            */
 /*-----------------------------------------------------------------*/
+
+// #define dbglog_scan4op(...) do { __VA_ARGS__; } while (0)
+#ifndef dbglog_scan4op
+  #define dbglog_scan4op(...) do { } while (0)
+#endif
+
 static S4O_RET
 scan4op (lineNode **pl, const char *pReg, const char *untilOp,
          lineNode **plCond)
 {
+  dbglog_scan4op (printf ("scan4op  %s  %s\n", pReg, untilOp));
+
   char *p;
   int len;
   bool isConditionalJump;
@@ -320,14 +328,22 @@ scan4op (lineNode **pl, const char *pReg, const char *untilOp,
       if (!(*pl)->line || (*pl)->isDebug || (*pl)->isComment)
         continue;
 
+      dbglog_scan4op (printf ("scan4op (2)\n"));
+
       /* don't optimize across inline assembler,
-         e.g. isLabel doesn't work there */
+         e.g. isLabel doesn't work there
+
+        FIXME: this doesn't work?!  with --peep-asm it will happily
+              optimize away dead stores before jumps and calls
+      */
       if ((*pl)->isInline)
         return S4O_ABORT;
 
       if ((*pl)->visited)
         return S4O_VISITED;
       (*pl)->visited = TRUE;
+
+      dbglog_scan4op (printf ("scan4op (3)\n"));
 
       /* found untilOp? */
       if (untilOp && strncmp ((*pl)->line, untilOp, strlen (untilOp)) == 0)
@@ -342,7 +358,10 @@ scan4op (lineNode **pl, const char *pReg, const char *untilOp,
             }
         }
 
-      /* found pReg? */
+      const bool is_tailcall = (*pl)->ic ? (*pl)->ic->tailcall : false;
+
+      dbglog_scan4op (printf ("scan4op (4)  %s  ic %p  tailcall %d\n", (*pl)->line, (*pl)->ic, is_tailcall));
+
       p = strchr ((*pl)->line, '\t');
       if (p)
         {
@@ -352,23 +371,45 @@ scan4op (lineNode **pl, const char *pReg, const char *untilOp,
           /* when looking for push or pop and we find a direct access of sp: abort */
           if (findPushPop && strstr (p, "sp"))
             return S4O_ABORT;
-
-          /* course search */
-          if (strstr (p, pReg + 1))
-            {
-              /* ok, let's have a closer look */
-
-              /* does opcode read from pReg? */
-              if (bitVectBitValue (port->peep.getRegsRead ((*pl)), rIdx))
-                return S4O_RD_OP;
-              /* does opcode write to pReg? */
-              if (bitVectBitValue (port->peep.getRegsWritten ((*pl)), rIdx))
-                return S4O_WR_OP;
-
-              /* we can get here, if the register name is
-                 part of a variable name: ignore it */
-            }
         }
+
+      dbglog_scan4op (
+        {
+          port->peep.getRegsRead (*pl);
+          port->peep.getRegsWritten (*pl);
+
+          printf ("    regs rd:      ");
+          bitVectPrint (stdout, port->peep.getRegsRead (*pl));
+
+          printf ("\n    regs wr:      ");
+          bitVectPrint (stdout, port->peep.getRegsWritten (*pl));
+
+          printf ("\n    regs call rd: ");
+          if ((*pl)->ic)
+            bitVectPrint (stdout, (*pl)->ic->rCallUsed);
+
+          printf ("\n");
+        });
+
+      /* Regardless whether the requested reg name is contained in the
+         insn operands or not, check if the insn is doing anything with it.
+         Some insns or operands have implicit/aliasing reg uses/defs.  */
+
+      /* does opcode read from pReg? */
+      if (bitVectBitValue (port->peep.getRegsRead (*pl), rIdx))
+        {
+          dbglog_scan4op (printf ("    S4O_RD_OP %d\n", rIdx));
+          return S4O_RD_OP;
+        }
+
+      /* does opcode write to pReg? */
+      if (bitVectBitValue (port->peep.getRegsWritten (*pl), rIdx))
+        {
+          dbglog_scan4op (printf ("    S4O_WR_OP %d\n", rIdx));
+          return S4O_WR_OP;
+        }
+
+      dbglog_scan4op (printf ("scan4op (5)\n"));
 
       /* found label? */
       if ((*pl)->isLabel)
@@ -384,31 +425,29 @@ scan4op (lineNode **pl, const char *pReg, const char *untilOp,
           /* register passing this label */
           if (!setLabelRefPassedLabel (label))
             {
+              /* FIXME: this can falsely trigger when it hits a dead
+                 label that is not referenced by anything, which can
+                 happen after some peephole replacements.  */
               DEADMOVEERROR();
               return S4O_ABORT;
             }
           continue;
         }
 
+      dbglog_scan4op (printf ("scan4op (6)\n"));
+
       /* branch or terminate? */
       isConditionalJump = FALSE;
       switch ((*pl)->line[0])
         {
           case 'a':
-            if (strncmp ("acall", (*pl)->line, 5) == 0)
-              {
-                /* for comments see 'lcall' */
-                ret = termScanAtFunc (*pl, rIdx);
-                if (ret != S4O_CONTINUE)
-                  return ret;
-                break;
-              }
+            if (strncmp ("acall", (*pl)->line, 5) == 0
+                || (strncmp ("ajmp", (*pl)->line, 4) == 0 && is_tailcall))
+              goto handle_call_insn;
+
             if (strncmp ("ajmp", (*pl)->line, 4) == 0)
-              {
-                *pl = findLabel (*pl);
-                if (!*pl)
-                  return S4O_ABORT;
-              }
+              goto handle_jmp_insn;
+
             break;
           case 'c':
             if (strncmp ("cjne", (*pl)->line, 4) == 0)
@@ -445,16 +484,25 @@ scan4op (lineNode **pl, const char *pReg, const char *untilOp,
               }
             break;
           case 'l':
-            if (strncmp ("lcall", (*pl)->line, 5) == 0)
+            if (strncmp ("lcall", (*pl)->line, 5) == 0
+                || (strncmp ("ljmp", (*pl)->line, 4) == 0 && is_tailcall))
               {
-                const char *p = (*pl)->line+5;
-                while (*p == ' ' || *p == '\t')
+              handle_call_insn:
+                dbglog_scan4op (printf ("scan4op call '%s'\n", p));
+
+                const char *p = (*pl)->line;
+                while (*p != ' ' && *p != '\t' && *p != '\0')
+                  p++;
+                while (*p == ' ' || *p == '\t' && *p != '\0')
                   p++;
                 while (isdigit (*p))
                   p++;
                 if (isdigit(p[-1]) && *p == '$') /* at least one digit */
                   {
-                    /* this is a temp label for a pcall */
+                    /* this is a temp label for a pcall.
+                       follow the lcall as if it was a jmp to comb through
+                       the setup code that comes before the actual calling 'ret'. */
+                    dbglog_scan4op (printf ("scan4op pcall\n"));
                     *pl = findLabel (*pl);
                     if (!*pl)
                       return S4O_ABORT;
@@ -462,6 +510,9 @@ scan4op (lineNode **pl, const char *pReg, const char *untilOp,
                   }
 
                 ret = termScanAtFunc (*pl, rIdx);
+
+                dbglog_scan4op (printf ("scan4op termScanAtFunc: %d\n", ret));
+
                 /* If it's a 'normal' 'caller save' function call, all
                    registers have been saved until the 'lcall'. The
                    'life range' of all registers end at the lcall,
@@ -480,6 +531,12 @@ scan4op (lineNode **pl, const char *pReg, const char *untilOp,
               }
             if (strncmp ("ljmp", (*pl)->line, 4) == 0)
               {
+              handle_jmp_insn:
+                dbglog_scan4op (printf ("scan4op jmp\n"));
+
+                if (strstr ((*pl)->line, "__sdcc_banked_ret"))
+                  goto handle_ret_insn;
+
                 *pl = findLabel (*pl);
                 if (!*pl)
                   return S4O_ABORT;
@@ -496,51 +553,60 @@ scan4op (lineNode **pl, const char *pReg, const char *untilOp,
 
             if (strncmp ("ret", (*pl)->line, 3) == 0)
               {
-                /* pcall uses 'ret' */
-                if (isFunc (*pl))
-                  {
-                    /* for comments see 'lcall' */
-                    ret = termScanAtFunc (*pl, rIdx);
-                    if (ret != S4O_CONTINUE)
-                      return ret;
-                    break;
-                  }
+              handle_ret_insn:
+                dbglog_scan4op (printf ("scan4op ret\n"));
+
+                /* pcall uses 'ret' instead of 'call' or 'jmp'.
+
+                   If the call or return uses any registers for arguments/return
+                   values, it would have been caught already by the early
+                   reg read/write checks above.
+
+                   If it's a 'ret' that got here somehow else (inline asm...?)
+                   and it's not part of the regular expected function, bail
+                   out to be safe.  But it shouldn't happen usually.  */
 
                 /* it's a normal function return */
                 if (!((*pl)->ic))
-                  return S4O_ABORT; /* but no ic? */
+                {
+                  dbglog_scan4op (printf ("scan4op ret err (1)\n"));
+                  return S4O_ABORT; /* but no ic? i.e. reg-use checks probably have not worked*/
+                }
+
                 if (!currFunc->type)
+                {
+                  dbglog_scan4op (printf ("scan4op ret err (2)\n"));
                   return S4O_ABORT;  /* not a function? */
-                if (FUNC_CALLEESAVES (currFunc->type))
-                  return S4O_ABORT; /* returning from callee saves function */
-                if (getSize(currFunc->etype) > 4)
-                  {
-                    for (unsigned i = 0; i < getSize(currFunc->etype); i++)
-                      if (strstr (pReg, fReturn8051[i]))
-                        return S4O_ABORT; /* return value is partially in r4-r7 */
-                  }
+                }
                 return S4O_TERM;
               }
             break;
           case 's':
             if (strncmp ("sjmp", (*pl)->line, 4) == 0)
-              {
-                *pl = findLabel (*pl);
-                if (!*pl)
-                  return S4O_ABORT;
-              }
+                goto handle_jmp_insn;
             break;
           default:
             break;
         } /* switch ((*pl)->line[0]) */
 
+
+      dbglog_scan4op (printf ("scan4op (7)\n"));
+
       if (isConditionalJump)
         {
+          dbglog_scan4op (printf ("scan4op (7.1) %p %p\n", pl, plCond));
+
           *plCond = findLabel (*pl);
+
+          dbglog_scan4op (printf ("scan4op (7.2) %p\n", *plCond));
+
           if (!*plCond)
             return S4O_ABORT;
           return S4O_CONDJMP;
         }
+
+      dbglog_scan4op (printf ("scan4op (8)\n"));
+
     } /* for (; *pl; *pl = (*pl)->next) */
   return S4O_ABORT;
 }
