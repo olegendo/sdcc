@@ -2595,6 +2595,61 @@ FBYNAME (notInJumpTable)
 }
 
 /*-----------------------------------------------------------------*/
+/* setTailcall - sets the ic->taillcall flag for the lines that    */
+/*               should be used when call/jump/ret insns are       */
+/*               combined, effectively forming a tailcall.         */
+/*               the ic->tailcall flag will be then carried over   */
+/*               to the new lines after doing the replacement.     */
+/*               always returns true.                              */
+/*-----------------------------------------------------------------*/
+FBYNAME (setTailcall)
+{
+  bool val = false;
+
+  if (cmdLine)
+    {
+      const char* cmdLineStart = cmdLine;
+
+      /* Trim leading and trailing whitespaces */
+      while (*cmdLineStart && ISCHARSPACE (*cmdLineStart))
+        cmdLineStart++;
+
+      const char* cmdLineEnd = cmdLineStart + strlen (cmdLine);
+      while (cmdLineEnd != cmdLineStart)
+        {
+          --cmdLineEnd;
+          if (!ISCHARSPACE (*cmdLineEnd))
+            break;
+        }
+
+      unsigned int cmdLineLen = cmdLineEnd - cmdLine;
+
+      if (strncmp (cmdLine, "true", cmdLineLen)
+          || strncmp (cmdLine, "1", cmdLineLen))
+        val = true;
+      else if (strncmp (cmdLine, "false", cmdLineLen)
+               || strncmp (cmdLine, "0", cmdLineLen))
+        val = false;
+      else
+        {
+          fprintf (stderr, "setTailcall unexpected arguments: %s\n", cmdLine);
+          abort ();
+        }
+    }
+  else
+    {
+      fprintf (stderr, "setTailcall no arguments\n");
+      abort ();
+    }
+
+  for (lineNode *cl = currPl; cl != endPl->next; cl = cl->next)
+    if (cl->ic)
+      cl->ic->tailcall = val;
+
+  return true;
+}
+
+/*-----------------------------------------------------------------*/
 /* isSpecialRegister - returns true if first operand is a special  */
 /*   register as named by the second operand.                      */
 /*   e.g. on mcs51 ("acc", "acc") would return true.               */
@@ -2728,6 +2783,9 @@ ftab[] =                                            // sorted on the number of t
   },
   {
     "notInJumpTable", notInJumpTable
+  },
+  {
+    "setTailcall", setTailcall
   },
   {
     "isSpecialRegister", isSpecialRegister
