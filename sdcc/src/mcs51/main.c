@@ -592,6 +592,11 @@ mcs51isSpecialRegister (const char *op1, const char *reg)
   return false;
 }
 
+// #define dbglog_insn_regs(...) do { __VA_ARGS__; } while (0)
+#ifndef dbglog_insn_regs
+  #define dbglog_insn_regs(...) do { } while (0)
+#endif
+
 static void
 updateOpRW (asmLineNode *aln, const char *op_in, const char *optype)
 {
@@ -608,8 +613,12 @@ updateOpRW (asmLineNode *aln, const char *op_in, const char *optype)
     *bit_sep = '\0';
   else if (bit_sep = strchr (op, '['))
     *bit_sep = '\0';
+
+retry_opdat_search:
   opdat = bsearch (op, mcs51operandDataTable, mcs51operandDataTableSize,
                    sizeof(mcs51operanddata), mcs51operandCompare);
+
+  dbglog_insn_regs (printf ("  updateOpRW op: %s  opdat: %p %s \n", op, opdat, opdat ? opdat->name : ""));
 
   if (opdat == NULL)
   {
@@ -707,6 +716,35 @@ updateOpRW (asmLineNode *aln, const char *op_in, const char *optype)
         }
       if (strstr(op, "a+"))
         aln->regsRead = bitVectSetBit (aln->regsRead, A_IDX);
+    }
+  if (strstr (op, "(0+") == op)
+    {
+      /* ISR push/pop for saving/restoring register banks use direct
+         addressing in the form "(base + offset)".  Base is always 0.
+         Handle at least r0-r7, so that the insns in the function body
+         will see that r0-r7 will be overwritten by the pop insns in the end.  */
+      const char* begin_offset = op + 3;
+      const char* end_offset = strchr (op, ')');
+      if (end_offset != NULL)
+        {
+          unsigned int sz = end_offset - begin_offset;
+          if (sz > 32)
+            sz = 32;
+
+          char tmp[33];
+          strncpy (tmp, begin_offset, sz);
+          tmp[sz] = '\0';
+
+          int offset_num = atoi (tmp);
+          if ((offset_num > 0 || (offset_num == 0 && tmp[0] == '0'))
+              && offset_num <= 7)
+            {
+              op[0] = 'r';
+              op[1] = offset_num + '0';
+              op[2] = '\0';
+              goto retry_opdat_search;
+            }
+        }
     }
 }
 
@@ -860,6 +898,94 @@ asmLineNodeFromLineNode (lineNode *ln)
       if (opdat->implicit_rd_idx >= 0)
         aln->regsRead = bitVectSetBit (aln->regsRead, opdat->implicit_rd_idx);
     }
+
+  if (!strcmp (inst, "lcall") || !strcmp (inst, "ljmp") || !strcmp (inst, "acall"))
+    {
+      /* Handle special library calls which do not go through the
+         regular function call expansion.  */
+      if (!strcmp (op1, "__gptrget")
+          || !strcmp (op1, "_gptrgetc")
+          || !strcmp (op1, "___gptr_cmp"))
+        {
+          aln->regsRead = bitVectSetBit (aln->regsRead, DPH_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, DPL_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, B_IDX);
+        }
+      else if (!strcmp (op1, "__gptrput"))
+        {
+          aln->regsRead = bitVectSetBit (aln->regsRead, DPH_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, DPL_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, B_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, A_IDX);
+        }
+      else if (!strcmp (op1, "__decdptr"))
+        {
+          aln->regsRead = bitVectSetBit (aln->regsRead, DPH_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, DPL_IDX);
+        }
+      else if (!strcmp (op1, "___sdcc_xpush_regs_r0"))
+        {
+          aln->regsRead = bitVectSetBit (aln->regsRead, A_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, B_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, R0_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, R1_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, R2_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, R3_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, R4_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, R5_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, R6_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, R7_IDX);
+        }
+      else if (!strcmp (op1, "___sdcc_xpush_regs"))
+        {
+          aln->regsRead = bitVectSetBit (aln->regsRead, A_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, B_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, R1_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, R2_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, R3_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, R4_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, R5_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, R6_IDX);
+          aln->regsRead = bitVectSetBit (aln->regsRead, R7_IDX);
+        }
+      else if (!strcmp (op1, "___sdcc_xpop_regs_r0"))
+        {
+          aln->regsRead = bitVectSetBit (aln->regsRead, B_IDX);
+        }
+      else if (!strcmp (op1, "___sdcc_xpop_regs"))
+        {
+          aln->regsRead = bitVectSetBit (aln->regsRead, B_IDX);
+        }
+    }
+
+  /* Function calls and returns insns don't have any explicit operands,
+     but rather implicit register operands for arguments/return values.
+     Those registers are marked as call-used by genSend, genRet, etc.
+
+     N.B. when the call/return register related insn are emitted,
+     they will all have the same iCode set.  Thus need to check here again
+     to only use the actual call/jump/return insn.  */
+  if (ln->ic
+      && (!strcmp (inst, "lcall") || !strcmp (inst, "acall")
+          || !strcmp (inst, "ret") || !strcmp (inst, "reti")
+          || ((!strcmp (inst, "ljmp") || !strcmp (inst, "sjmp") || !strcmp (inst, "ajmp"))
+              && (ln->ic->tailcall || !strcmp (op1, "__sdcc_banked_ret")))))
+    {
+      if (ln->ic->rCallUsed)
+        aln->regsRead = bitVectUnion (aln->regsRead, ln->ic->rCallUsed);
+    }
+
+  dbglog_insn_regs ({
+    printf ("asmLineNodeFromLineNode ln: %p ic: %p op: %d  line: %s", ln, ln->ic, ln->ic ? ln->ic->op : -1, ln->line);
+
+    printf ("\n   regs wr:      %p  ", aln->regsWritten);
+    bitVectPrint (stdout, aln->regsWritten);
+
+    printf ("\n   regs rd:      %p  ", aln->regsRead);
+    bitVectPrint (stdout, aln->regsRead);
+
+    printf ("\n   op1: %s  op2: %s\n", op1, op2);
+  });
 
   return aln;
 }
