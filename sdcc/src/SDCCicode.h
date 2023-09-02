@@ -158,6 +158,7 @@ typedef struct iCode
   int defKey;                   /* key for the operand being defined  */
   bitVect *uses;                /* vector of key of used symbols      */
   bitVect *rUsed;               /* registers used by this instruction */
+  bitVect *rCallUsed;           /* registers used for args/return if this is a call/return instruction */
   bitVect *rMask;               /* registers in use during this instruction */
   bitVect *rSurv;               /* registers that survive this instruction (i.e. they are in use, it is not their last use and they are not in the return) */
   union
