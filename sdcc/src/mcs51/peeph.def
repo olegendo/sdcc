@@ -390,6 +390,21 @@ replace {
 } if labelInRange(%5)
 
 replace {
+	ljmp	%5
+} by {
+	;	Peephole 112.c	changed ljmp to sjmp
+	sjmp	%5
+} if labelInRange(%5)
+
+replace restart {
+	%1	%2
+	ret
+} by {
+	; Peephole 112.d   removed dead ret
+	%1	%2
+} if same(%1 'sjmp' 'ljmp' 'ajmp')
+
+replace {
 	clr	a
 	cjne	%1,%2,%3
 	cpl	a
@@ -804,6 +819,151 @@ replace {
 } if operandsLiteral(%1)
 
 replace {
+	addc	a,%1
+	anl	a,#0x01
+	add	a,#0xff
+	clr	a
+	rlc	a
+	add	a,#0xff
+} by {
+	; Peephole 132.a0 removed carry bit round trip
+	addc	a,%1
+}
+
+replace {
+	clr	a
+	rlc	a
+	add	a,#0xff
+} by {
+	; Peephole 132.a1 removed carry bit round trip
+} if notUsed('a')
+
+replace {
+	addc	a,%1
+	anl	a,#0x01
+	add	a,#0xff
+} by {
+	; Peephole 132.a2 optimized addc
+} if notUsed('a'), notVolatile(%1)
+
+replace restart {
+	mov	c,%1
+	cpl	c
+	clr	a
+	rlc	a
+	%4	%5,%6
+	rrc	a
+} by {
+	; peephole 850 removed carry bit round trip from unpack-pack bits
+	%4	%5,%6
+	mov	c,%1
+	cpl	c
+} if operandsNotRelated('a' %5 %6), notUsed('a')
+
+// FIXME: check remove, see below
+replace {
+	addc	a,%1
+	rr	a
+	anl	a,#0x01
+	add	a,#0xff
+} by {
+	; Peephole 132.a3 optimized bit 1 extract
+	addc	a,%1
+	rr	a
+	rrc	a
+} if notUsed('a')
+
+// FIXME: check remove, see below
+replace {
+	addc	a,%1
+	rr	a
+	rr	a
+	anl	a,#0x01
+	add	a,#0xff
+} by {
+	; Peephole 132.a3 optimized bit 2 extract
+	addc	a,%1
+	rr	a
+	rr	a
+	rrc	a
+} if notUsed('a')
+
+replace {
+	mov	c,%1
+	clr	a
+	rlc	a
+	add	a,#0xff
+} by {
+	; Peephole 132.a3 optimized bit extract
+	mov	c,%1
+} if notUsed('a')
+
+replace {
+	swap	a
+	anl	a,#0x01
+	add	a,#0xff
+} by {
+	; Peephole 132.a3 optimized bit 4 extract
+	mov	c,acc.4
+} if notUsed('a')
+
+replace {
+	rl	a
+	rl	a
+	anl	a,#0x01
+	add	a,#0xff
+} by {
+	; Peephole 132.a3 optimized bit 6 extract
+	rl	a
+	rlc	a
+} if notUsed('a')
+
+replace {
+	rl	a
+	anl	a,#0x01
+	add	a,#0xff
+} by {
+	; Peephole 132.a3 optimized bit 7 extract
+	rlc	a
+} if notUsed('a')
+
+replace {
+	rr	a
+	anl	a,#0x01
+	add	a,#0xff
+} by {
+	; Peephole 132.a3 optimized bit 1 extract
+	rr	a
+	rrc	a
+} if notUsed('a')
+
+replace {
+	rr	a
+	rr	a
+	anl	a,#0x01
+	add	a,#0xff
+} by {
+	; Peephole 132.a3 optimized bit 2 extract
+	rr	a
+	rr	a
+	rrc	a
+} if notUsed('a')
+
+replace {
+	add	a,#0x01
+} by {
+	; Peephole 928
+	inc	a
+} if notUsed('C')
+
+replace {
+	add	a,#0xff
+} by {
+	; Peephole 934
+	dec	a
+} if notUsed('C')
+
+replace {
 	clr	c
 	mov	a,#%1
 	subb	a,%2
@@ -827,17 +987,15 @@ replace {
 	jc	%5
 } if operandsLiteral(%1)
 
-// disabled. See bug1734654.c
+// disabled -- without last 'cpl c' insn it results in wrong code. See bug1734654.c
 //replace {
 //	clr	c
 //	mov	a,%1
 //	subb	a,#%2
-//	mov	%3,c
 //} by {
 //	;	Peephole 132.d	optimized genCmpGt by inverse logic
 //	mov	a,#0x100 - %2
 //	add	a,%1
-//	mov	%3,c
 //} if operandsNotRelated('0x00' %2), operandsLiteral(%2)
 
 replace {
@@ -900,6 +1058,375 @@ replace {
 	;	Peephole 135	removed redundant mov
 	orl	a,r%2
 }
+
+replace restart {
+	mov	r%1,#0x00
+	%4	ar%1,#%2
+} by {
+	;	Peephole 135_1	removed redundant %4
+	mov	r%1,#%2
+} if same(%4 'orl' 'xrl')
+
+replace restart {
+	%4	a,#0x00
+} by {
+	; 	Peephole 135_2	removed redundant %4
+} if same(%4 'orl' 'xrl')
+
+replace {
+	mov	r%1,#0x00
+	mov	a,#%2
+	add	a,r%1
+	mov	r%1,a
+	mov	a,#0x00
+	addc	a,r%3
+	mov	r%3,a
+} by {
+	;	Peephole 135_2	optimized zero-extended add
+	mov	r%1,#%2
+}
+
+replace restart {
+	mov	%1,#0x00
+	cjne	%2,%3,%4
+	cjne	%1,#0x00,%4
+} by {
+	; Peephole 135_3    optimized zero-extended cjne
+	mov	%1,#0x00
+	cjne	%2,%3,%4
+} if labelRefCountChange(%4 -1)
+
+replace {
+	anl	a,#0x01
+	cjne	a,#0x01,%1
+%1:
+} by {
+	; Peephole 135_4	optimized acc.0 == 0 -> c
+	mov	c,acc.0
+	cpl	c
+} if notUsed('a'), labelRefCount(%1 1), labelRefCountChange(%1 -1)
+
+replace {
+	clr	a
+	rlc	a
+	cjne	a,#0x01,%1
+%1:
+} by {
+	;   Peephole 245.c  optimized ~c -> c
+	cpl	c
+} if notUsed('a'), labelRefCount(%1 1), labelRefCountChange(%1 -1)
+
+replace {
+	cjne	a,#0x01,%1
+%1:
+} by {
+	;   Peephole 245.d  optimized a == 0 -> c
+	add	a,#0xff
+	cpl	c
+} if notUsed('a'), labelRefCount(%1 1), labelRefCountChange(%1 -1)
+
+replace {
+	rl	a
+	mov	c,acc.0
+} by {
+	;   Peephole 245.e  optimized acc.7 -> c
+	rlc	a
+} if notUsed('a')
+
+replace {
+	mov	c,acc.7
+} by {
+	; Peephole 1141	   optimized acc.7 -> c
+	rlc	a
+} if notUsed('a')
+
+replace {
+	addc	a,%1
+	mov	c,acc.0
+} by {
+	; Peephole 135_5   removed unneeded addc
+} if notUsed('a')
+
+replace {
+	mov	r%1,%2
+	mov	a,#%3
+	%4	a,r%1
+} by {
+	; Peephole 1118
+	mov	r%1,%2
+	mov	a,r%1
+	%4	a,#%3
+} if same(%4 'anl' 'orl' 'xrl')
+
+replace restart {
+	%4	a,%1
+	mov	%1,a
+} by {
+	; Peephole 1128
+	%4	%1,a
+	mov	a,%1
+} if same(%4 'anl' 'orl' 'xrl'), operandsNotRelated(%1 '@r0' '@r1')
+
+replace restart {
+	mov	r%1,%2
+	mov	a,%3
+	%4	ar%1,a
+} by {
+	; Peephole 1138
+	mov	a,%3
+	%4	a,%2
+	mov	r%1,a
+} if same(%4 'anl' 'orl' 'xrl'), notSame(%2 'a')
+
+replace restart {
+	mov	r%1,a
+	mov	a,%3
+	%4	ar%1,a
+} by {
+	; Peephole 1149
+	%4	a,%3
+	mov	r%1,a
+} if same(%4 'anl' 'orl' 'xrl')
+
+replace restart {
+	mov	r%1,%2
+	%4	r%1
+	mov	%2,r%1
+} by {
+	; Peephole 1159
+	%4	%2
+	mov	r%1,%2
+} if notVolatile(%2), same(%4 'inc' 'dec')
+
+// can omit the preceding 'and' operation if the bits that
+// it clears (by masking with '0') are all set by the following 'or' operation.
+// i.e. the inverted and mask must be the same as the or mask.
+replace {
+	mov	a,#%1
+	anl	a,%2
+	orl	a,#%3
+} by {
+	; Peephole 135_3  removed redundant and
+	mov	a,%2
+	orl	a,#%3
+} if immdInRange(0 255 '^' %1 255 %4), immdInRange(0 0 '^' %4 %3 %5)
+
+replace {
+	mov	a,r%2
+	anl	a,#%1
+	orl	a,#%3
+} by {
+	; Peephole 135_3  removed redundant and
+	mov	a,r%2
+	orl	a,#%3
+} if immdInRange(0 255 '^' %1 255 %4), immdInRange(0 0 '^' %4 %3 %5)
+
+
+replace {
+	mov	a,#%1
+	%4	a,r%2
+} by {
+	; Peephole 1191
+	mov	a,r%2
+	%4	a,#%1
+} if same(%4 'add' 'anl' 'orl' 'xrl')
+
+replace {
+	mov	r%1,a
+	inc	r%1
+	inc	r%1
+	inc	r%1
+} by {
+	; Peephole 1201
+	add	a,#0x03
+	mov	r%1,a
+} if notUsed('a'), notUsed('C')
+
+replace {
+	mov	r%1,a
+	inc	r%1
+	inc	r%1
+	inc	r%1
+	inc	r%1
+} by {
+	; Peephole 1214
+	add	a,#0x04
+	mov	r%1,a
+} if notUsed('a'), notUsed('C')
+
+replace {
+	mov	r%1,a
+	inc	r%1
+	inc	r%1
+	inc	r%1
+	inc	r%1
+	inc	r%1
+} by {
+	; Peephole 1227
+	add	a,#0x05
+	mov	r%1,a
+} if notUsed('a'), notUsed('C')
+
+replace {
+	add	a,#%1
+	add	a,#%2
+} by {
+	; Peephole 1236
+	add	a,#(%1 + %2)
+}
+
+// these type of patterns happen a lot when accessing stack variables
+replace {
+	mov	%1,%2
+	dec	%1
+	mov	%3,@%1
+	inc	%1
+	mov	%4,@%1
+} by {
+	; Peephole 1239
+	mov	%1,%2
+	mov	%4,@%1
+	dec	%1
+	mov	%3,@%1
+	inc	%1
+} if notVolatile(%1 %2), same(%1 'r0' 'r1')
+// FIXME: add more register constraints
+
+replace {
+	mov	%1,%2
+	dec	%1
+	dec	%1
+	mov	%3,@%1
+	inc	%1
+	mov	%4,@%1
+	inc	%1
+	mov	%5,@%1
+} by {
+	; Peephole 1242
+	mov	%1,%2
+	mov	%5,@%1
+	dec	%1
+	mov	%4,@%1
+	dec	%1
+	mov	%3,@%1
+	inc	%1
+	inc	%1
+} if notVolatile(%1 %2), same(%1 'r0' 'r1')
+// FIXME: add more register constraints
+
+replace {
+	mov	%1,%2
+	dec	%1
+	dec	%1
+	dec	%1
+	mov	%3,@%1
+	inc	%1
+	mov	%4,@%1
+	inc	%1
+	mov	%5,@%1
+	inc	%1
+	mov	%6,@%1
+} by {
+	; Peephole 1281
+	mov	%1,%2
+	mov	%6,@%1
+	dec	%1
+	mov	%5,@%1
+	dec	%1
+	mov	%4,@%1
+	dec	%1
+	mov	%3,@%1
+	inc	%1
+	inc	%1
+	inc	%1
+} if notVolatile(%1 %2), same(%1 'r0' 'r1')
+// FIXME: add more register constraints
+
+replace {
+	mov	%1,%2
+	dec	%1
+	mov	@%1,%3
+	inc	%1
+	mov	@%1,%4
+} by {
+	; Peephole 1303
+	mov	%1,%2
+	mov	@%1,%4
+	dec	%1
+	mov	@%1,%3
+	inc	%1
+} if notVolatile(%1 %2), same(%1 'r0' 'r1')
+// FIXME: add more register constraints
+
+replace {
+	mov	%1,%2
+	dec	%1
+	dec	%1
+	mov	@%1,%3
+	inc	%1
+	mov	@%1,%4
+	inc	%1
+	mov	@%1,%5
+} by {
+	; Peephole 1321
+	mov	%1,%2
+	mov	@%1,%5
+	dec	%1
+	mov	@%1,%4
+	dec	%1
+	mov	@%1,%3
+	inc	%1
+	inc	%1
+} if notVolatile(%1 %2), same(%1 'r0' 'r1')
+// FIXME: add more register constraints
+
+replace {
+	mov	%1,%2
+	dec	%1
+	dec	%1
+	dec	%1
+	mov	@%1,%3
+	inc	%1
+	mov	@%1,%4
+	inc	%1
+	mov	@%1,%5
+	inc	%1
+	mov	@%1,%6
+} by {
+	; Peephole 1345
+	mov	%1,%2
+	mov	@%1,%6
+	dec	%1
+	mov	@%1,%5
+	dec	%1
+	mov	@%1,%4
+	dec	%1
+	mov	@%1,%3
+	inc	%1
+	inc	%1
+	inc	%1
+} if notVolatile(%1 %2), same(%1 'r0' 'r1')
+// FIXME: add more register constraints
+
+replace {
+	mov	%1,%2
+	inc	%1
+	inc	%1
+	mov	%3,@%1
+	dec	%1
+	mov	%4,@%1
+	dec	%1
+	mov	%5,@%1
+} by {
+	mov	%1,%2
+	mov	%5,@%1
+	inc	%1
+	mov	%4,@%1
+	inc	%1
+	mov	%3,@%1
+	dec	%1
+	dec	%1
+} if notVolatile(%1 %2), same(%1 'r0' 'r1'), notSame(%1 %5 %4 %3), notSame(%5 %4 %3), notSame(%4 %3)
 
 replace {
 	mov	%1,a
@@ -1007,6 +1534,15 @@ replace {
 }
 
 replace {
+	rr	a
+	mov	c,acc.0
+} by {
+	; Peephole 143.a0
+	rr	a
+	rrc	a
+} if notUsed('a')
+
+replace {
 	rrc	a
 	mov	acc.7,c
 } by {
@@ -1030,28 +1566,6 @@ replace {
 	;	Peephole 145.b	changed to add without carry
 	mov	a,%1
 	add	a,%2
-}
-
-// 147: Fix compiler output to comply with 8051 instruction set.
-replace {
-	orl	r%1,a
-} by {
-	;	Peephole 147.a	changed target address mode r%1 to ar%1
-	orl	ar%1,a
-}
-
-replace {
-	anl	r%1,a
-} by {
-	;	Peephole 147.b	changed target address mode r%1 to ar%1
-	anl	ar%1,a
-}
-
-replace {
-	xrl	r%1,a
-} by {
-	;	Peephole 147.c	changed target address mode r%1 to ar%1
-	xrl	ar%1,a
 }
 
 replace {
@@ -1178,14 +1692,107 @@ replace {
 	ret
 }
 
+replace {
+	mov	%1,%2
+	mov	ar%3,%1
+} by {
+	; 	peephole 1628
+	mov	r%3,%2
+} if same(%1 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), notUsed(%1)
+
+
+replace {
+	mov	%1,%2
+	mov	%3,%1
+} by {
+	; 	peephole 1464   %2 -> %1 -> %3  => %2 -> %3
+	mov	%3,%2
+} if same(%1 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), notUsed(%1)
+
+replace {
+	mov	r%1,%2
+	mov	dpl,r%1
+} by {
+	;	Peephole 1464   optimized dpl
+	mov	dpl,%2
+} if notUsed(%1)
+
+replace restart {
+	mov	%1,%2
+	mov	%3,%4
+	mov	%5,%1
+} by {
+	;	Peephole 1662
+	mov	%1,%2
+	mov	%3,%4
+	mov	%5,%2
+} if same(%1 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), notVolatile(%2), operandsNotRelated(%1 %2 %3)
+
+replace restart {
+	mov	a%1,%2
+	mov	a%3,%4
+	mov	dpl,%1
+	mov	dph,%3
+} by {
+	mov	dpl,%2
+	mov	dph,%4
+} if notUsed(%1), notUsed(%3), operandsNotRelated(%1 %2 %3 %4 'dptr')
+
+replace {
+	mov	r%1,a
+	mov	r%2,#%3
+	mov	dpl,r%1
+	mov	dph,r%2
+%9:
+	ret
+} by {
+	;	Peephole 150.j
+	mov	dpl,a
+	mov	dph,#%3
+%9:
+	ret
+}
+
+replace {
+	mov	r%1,a
+	mov	r%2,#%3
+	mov	dpl,r%2
+	mov	dph,r%1
+%9:
+	ret
+} by {
+	;	Peephole 150.k
+	mov	dph,a
+	mov	dpl,#%3
+%9:
+	ret
+}
+
+replace {
+	mov	r%1,a
+	mov	r%2,#%3
+	mov	ar%2,r%1
+	mov	r%1,#%4
+	mov	dpl,r%1
+	mov	dph,r%2
+%9:
+	ret
+} by {
+	;	Peephole 150.l
+	mov	dpl,#%4
+	mov	dph,a
+%9:
+	ret
+}
+
 // peephole 213.a might revert this
 replace {
 	mov	%1,#%2
-	xrl	%1,#0x80
+	xrl	%1,#%3
 } by {
 	;	Peephole 159	avoided xrl during execution
-	mov	%1,#(%2 ^ 0x80)
-}
+	mov	%1,#%4
+} if notVolatile(%1), immdInRange(0 255 '^' %2 %3 %x4)
 
 replace {
 	jnc	%1
@@ -1381,10 +1988,10 @@ replace {
 
 // this one will screw assignes to volatile/sfr's
 replace {
-	mov  %1,%2
-	mov  %2,%1
+	mov	%1,%2
+	mov	%2,%1
 } by {
-	mov  %1,%2
+	mov	%1,%2
 	;	Peephole 177.a	removed redundant mov
 } if notVolatile %1 %2
 
@@ -1483,6 +2090,15 @@ replace {
 	mov	a,%2
 }
 
+replace {
+	mov	r%1,a
+	mov	%2,r%1
+} by {
+	;	Peephole 178.1	optimized mov sequence
+	mov	r%1,a
+	mov	%2,a
+}
+
 // rules 179-182 provided by : Frieder <fe@lake.iup.uni-heidelberg.de>
 // saving 2 byte, 1 cycle
 replace {
@@ -1577,16 +2193,16 @@ replace {
 	anl	%1,#%3
 } by {
 	;	Peephole 183.a	avoided anl during execution
-	anl	%1,#(%2&%3)
-} if notVolatile %1
+	anl	%1,#%4
+} if notVolatile(%1), immdInRange(0 255 '&' %2 %3 %x4)
 
 replace {
 	orl	%1,#%2
 	orl	%1,#%3
 } by {
 	;	Peephole 183.b	avoided orl during execution
-	orl	%1,#(%2|%3)
-} if notVolatile %1
+	orl	%1,#%4
+} if notVolatile(%1), immdInRange(0 255 '|' %2 %3 %x4)
 
 replace {
 	mov	%1,a
@@ -2168,12 +2784,19 @@ replace {
 	mov	dptr,#%1
 }
 
-replace {
+replace restart {
 	push	%1
 	pop	%1
 } by {
 	;	Peephole 211	removed redundant push %1 pop %1
 }
+
+replace restart {
+	pop	%1
+	push	%1
+} by {
+	; Peephole 211.1   removed redundant pop %1  push %1
+} if same(%1 'ar0' 'ar1' 'ar2' 'ar3' 'ar4' 'ar5' 'ar6' 'ar7' 'dpl' 'dph' 'b' 'a' 'acc'), notUsed(%1)
 
 // Does not seem to be triggered anymore
 //replace {
@@ -2782,11 +3405,11 @@ replace {
 
 // applies to f.e. ser_ir.asm
 replace {
-	mov	r%1,acc
+	mov	r%1,%2
 } by {
-	;	Peephole 239	used a instead of acc
+	;	Peephole 239	used a instead of %2
 	mov	r%1,a
-}
+} if isSpecialRegister(%2 'acc')
 
 replace restart {
 	mov	a,%1
@@ -2889,6 +3512,25 @@ replace {
 %0:
 %1:
 } if labelRefCount(%0 2), labelRefCountChange(%1 -1)
+
+replace {
+	cjne	r%2,#0x01,%0
+	cjne	r%4,#%5,%0
+	mov	a,r%2
+	sjmp	%1
+%0:
+	clr	a
+%1:
+} by {
+	;	Peephole 241.c1	optimized compare
+	clr	a
+	cjne	r%2,#0x01,%0
+	cjne	r%4,#%5,%0
+	inc	a
+%0:
+%1:
+} if labelRefCount(%0 2), labelRefCountChange(%1 -1)
+
 
 // applies to f.e. malloc.c
 replace {
@@ -3047,6 +3689,16 @@ replace {
 %1:
 %2:
 } if labelRefCount(%1 1), labelRefCountChange(%2 -1)
+
+replace restart {
+	cjne	a,%1,%2
+	sjmp	%3
+%2:
+} by {
+	; peephole 3620   optimized compare (jump if equal)
+	xrl	a,%1
+	jz	%3
+} if notUsed('a'), notUsed('C'), labelRefCount(%2 1), labelRefCountChange(%2 -1)
 
 // applies to f.e. scott-bool1.c
 replace {
@@ -5021,6 +5673,127 @@ replace {
 	clr	c
 }
 
+replace {
+	mov	%1,dpl
+	mov	%2,dph
+	mov	%3,b
+	push	a%3
+	push	a%2
+	push	a%1
+} by {
+	; Peephole 273 5627 optimized push
+	push	b
+	push	dph
+	push	dpl
+	mov	%1,dpl
+	mov	%2,dph
+	mov	%3,b
+}
+
+replace {
+	mov	%1,dpl
+	mov	%2,dph
+	mov	%3,b
+	push	a%1
+	push	a%2
+	push	a%3
+} by {
+	; Peephole 273 5644 optimized push
+	push	dpl
+	push	dph
+	push	b
+	mov	%1,dpl
+	mov	%2,dph
+	mov	%3,b
+}
+
+
+replace {
+	mov	%1,dpl
+	mov	%2,dph
+	push	a%2
+	push	a%1
+} by {
+	; Peephole 273.1 optimized push
+	push	dph
+	push	dpl
+	mov	%1,dpl
+	mov	%2,dph
+}
+
+replace {
+	mov	%1,dpl
+	mov	%2,dph
+	push	a%1
+	push	a%2
+} by {
+	; Peephole 273.1 optimized push
+	push	dpl
+	push	dph
+	mov	%1,dpl
+	mov	%2,dph
+}
+
+replace {
+	pop	a%1
+	pop	a%2
+	pop	a%3
+	mov	dpl,%1
+	mov	dph,%2
+	mov	b,%3
+} by {
+	; Peephole 273 5688 optimized pop
+	pop	dpl
+	pop	dph
+	pop	b
+	mov	%1,dpl
+	mov	%2,dph
+	mov	%3,b
+}
+
+replace	{
+	pop	a%1
+	pop	a%2
+	mov	dpl,%1
+	mov	dph,%2
+} by {
+	; Peephole 273.2 optimized pop
+	pop	dpl
+	pop	dph
+	mov	%1,dpl
+	mov	%2,dph
+}
+
+replace {
+	pop	a%1
+	pop	a%2
+	mov	%3,%1
+} by {
+	; Peephole 273.3 optimized pop
+	pop	%3
+	pop	a%2
+	mov	%1,%3
+} if same(%3 'dpl' 'dph' 'b')
+
+
+replace {
+	pop	a%1
+	mov	%2,%1
+} by {
+	; Peephole 273.4 optimized pop
+	pop	%2
+	mov	%1,%2
+} if same(%2 'dpl' 'dph' 'b')
+
+replace {
+	mov	%1,%2
+	push	a%1
+} by {
+	; Peephole 273 optimized push
+	push	%2
+	mov	%1,%2
+} if same(%2 'dpl' 'dph' 'b')
+
 
 replace restart {
 	pop	ar%1
@@ -5028,24 +5801,235 @@ replace restart {
 	;	Peephole 300	pop ar%1 removed
 } if deadMove(%1)
 
+// N.B. this can breake callee-save if the call reg uses bits
+//      aren't set properly.
+replace restart {
+	pop	a%1
+} by {
+	;	Peephole 300.1	pop a%1 -> dec sp
+	dec	sp
+} if same(%1 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), notUsed(%1)
+
+
 replace restart {
 	push	ar%1
 } by {
 	;	Peephole 301	push ar%1 removed
 } if deadMove(%1)
 
-replace {
+replace restart {
 	mov	r%1,%2
 } by {
 	;	Peephole 302	mov r%1,%2 removed
 } if notVolatile(%2), deadMove(%1)
 
-replace {
+replace restart {
 	mov	ar%1,%2
 } by {
 	;	Peephole 303	mov ar%1,%2 removed
 } if notVolatile(%2), deadMove(%1)
 
+replace restart {
+	mov	%1,%2
+} by {
+	;	Peephole 304	mov %1,%2 removed
+} if notVolatile(%2), same(%1 'a' 'dpl' 'dph' 'b'), notUsed(%1)
+
+replace {
+	clr	a
+} by {
+	; Peephole 304.1  clr a removed
+} if notUsed('a')
+
+replace restart {
+	mov	a,%1
+} by {
+	; Peephole 304.2  mov a,%1 removed
+} if isSpecialRegister(%1 'acc')
+
+replace restart {
+	mov	%1,%2
+} by {
+	; Peephole 304.2_1  mov a,%1 removed
+	mov	a,%2
+} if isSpecialRegister(%1 'acc')
+
+replace restart {
+	mov	%1,%2
+} by {
+	; Peephole 304.2_2  mov a,%1 removed
+	mov	%1,a
+} if isSpecialRegister(%2 'acc')
+
+replace {
+	%1	a,a
+} by {
+	; Peephole 5873 mov a,a  removed
+} if same(%1 'mov' 'xch')
+
+replace {
+	mov	%2,a%1
+} by {
+	; Peephole 304.2_3  mov a%1,%2 -> mov %1,%2
+	mov	%2,%1
+} if notSame(%2 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7' '@r0' '@r1'), same(%1 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7')
+
+replace {
+	mov	a%1,%2
+} by {
+	; Peephole 304.2_3  mov a%1,%2 -> mov %1,%2
+	mov	%1,%2
+} if notSame(%2 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7' '@r0' '@r1'), same(%1 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7')
+
+replace restart {
+	%4	a,%1
+} by {
+	; Peephole 304.3	removed dead computation  %4  a,%1
+} if same(%4 'add' 'addc' 'subb'), notUsed('a'), notUsed('C'), notVolatile(%1)
+
+replace {
+	%4	a
+} by {
+	; Peephole 304.4	removed dead computation   %4  a
+} if same(%4 'rlc' 'rrc'), notUsed('a'), notUsed('C')
+
+replace restart {
+	%4	a,%1
+} by {
+	; Peephole 304.5	removed dead computation   %4  a,%1
+} if same(%4 'anl' 'orl' 'xrl'), notUsed('a'), notVolatile(%1)
+
+replace restart {
+	%4	ar%1,%2
+} by {
+	; Peephole 304.5_1	removed dead computation  %4  a%1,%2
+} if same(%4 'anl' 'orl' 'xrl'), notUsed(%1), notVolatile(%2)
+
+replace restart {
+	clr	a
+	%4	a,%1
+} by {
+	; Peephole 304.5_2	removed dead computation  %4  a,%1
+	mov	a,%1
+} if same(%4 'orl' 'xrl')
+
+replace restart {
+	%4	a
+} by {
+	; Peephole 304.6	removed dead computation   %4  a
+} if same(%4 'rr' 'rl' 'inc' 'dec' 'swap'), notUsed('a')
+
+replace restart {
+	%4	%1
+} by {
+	; Peephole 304.6   removed dead computation  %4 %1
+} if same(%4 'inc' 'dec'), same(%1 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7' 'dpl' 'dph' 'b'), notUsed(%1)
+
+replace restart {
+	mov	%1,%2
+	mov	%3,%4
+	mov	%1,%2
+} by {
+	; Peephole 861  removed redunandant load
+	mov	%1,%2
+	mov	%3,%4
+} if notVolatile(%1 %2), operandsNotRelated(%3 %1 %2)
+
+replace restart {
+	mov	%1,%2
+	%5	%3,%4
+	%6	%7
+	mov	%1,%2
+} by {
+	; Peephole 861  removed redunandant load
+	mov	%1,%2
+	%5	%3,%4
+	%6	%7
+} if notSame(%6 'push' 'pop'), notVolatile(%1 %2), operandsNotRelated(%3 %1 %2 'sp'), operandsNotRelated(%7 %1 %2 'sp')
+
+replace restart {
+	anl	a,#0x01
+	%4	%5,%6
+	rrc	a
+} by {
+	; peephole 864 removed carry bit round trip from unpack-pack bits
+	%4	%5,%6
+	mov	c,acc.0
+} if operandsNotRelated('a' %5 %6), notUsed('a')
+
+
+replace {
+	%4	c
+} by {
+	; Peephole 304.3 clr c removed
+} if notUsed('C'), same(%4 'clr' 'setb')
+
+// dead store of virtual bit registers
+replace restart {
+	mov	%1,c
+} by {
+	;   Peephole 305	mov	%1,c removed
+} if same(%1 'b0' 'b1' 'b2' 'b3' 'b4' 'b5' 'b6' 'b7'), deadMove(%1)
+
+replace restart {
+	%4	%1
+} by {
+	;	Peephole 305.2	removed dead virtual bit register use
+} if same(%4 'anl' 'orl'), same(%1 'b0' 'b1' 'b2' 'b3' 'b4' 'b5' 'b6' 'b7'), notUsed(%1)
+
+replace restart {
+	mov	b%1,c
+	mov	c,b%2
+	%4	c,b%1
+} by {
+	mov	b%1,c
+	%4	c,b%2
+} if same(%4 'anl' 'orl')
+
+replace restart {
+	mov	b%1,c
+	mov	c,%2
+	%4	c,b%1
+} by {
+	mov	b%1,c
+	%4	c,%2
+} if same(%4 'anl' 'orl')
+
+replace restart {
+	movx	a,@dptr
+} by {
+	;	Peephole 306.a  removed unused movx load
+} if notUsed('a'), notVolatile()
+
+replace restart {
+	inc	dptr
+} by {
+	;	Peephole 306.b	removed unused inc dptr
+} if notUsed('dpl'), notUsed('dph')
+
+replace restart {
+	%4	%1
+} by {
+	;	Peephole 306.c  removed unused %4 r%1
+} if same(%4 'inc' 'dec'), same(%1 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), notUsed(%1)
+
+replace restart {
+	mov	%5,a
+	mov	a,%7
+	%1	a,%2
+	%3	a,%5
+} by {
+	xch	a,%7
+	%1	a,%2
+	%3	a,%7
+} if notUsed(%5), operandsNotRelated(%5 %2 %7), same(%7 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), same(%5 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7')
+replace {
+	ljmp	__sdcc_banked_call
+	ljmp	__sdcc_banked_ret
+} by {
+	;	Peephole 400.c_b	replaced lcall/ret with ljmp
+	ljmp	__sdcc_banked_call
+} if optimizeReturn(), setTailcall(true)
 
 // applies to: void test( char c ) { if( c ) func1(); else func2(); }
 replace {
@@ -5079,6 +6063,23 @@ replace {
 	ret
 } if optimizeReturn(), notSame(%1 '_longjmp'), setTailcall(true)
 
+replace restart {
+	%1	%2
+	ret
+} by {
+	;	Peephole 400.c_1	removed unreachable ret
+	%1	%2
+} if optimizeReturn(), same(%1 'sjmp' 'ljmp')
+
+replace {
+	%1	%2
+	ljmp	__sdcc_banked_ret
+} by {
+	;	Peephole 6098	removed unreachable banked ret
+	%1	%2
+} if optimizeReturn(), same(%1 'sjmp' 'ljmp')
+
+
 // for programs less than 2k
 replace {
 	lcall	%1
@@ -5095,6 +6096,731 @@ replace {
 	ajmp	%1
 } if useAcallAjmp
 
+replace {
+	mov	a,%1
+	rl	a
+	anl	a,#0x01
+	jz	%2
+} by {
+	; Peephole 700.7
+	mov	a,%1
+	jnb	acc.7,%2
+}
+
+replace {
+	mov	a,%1
+	rl	a
+	anl	a,#0x01
+	mov	r%3,a
+	cjne	r%3,#0x01,%2
+} by {
+	; Peephole 700.7n
+	mov	a,%1
+	jnb	acc.7,%2
+}
+
+replace {
+	mov	a,%1
+	rl	a
+	anl	a,#0x01
+	jnz	%2
+} by {
+	; Peephole 700.7nn
+	mov	a,%1
+	jb	acc.7,%2
+}
+
+replace {
+	mov	a,%1
+	rl	a
+	rl	a
+	anl	a,#0x01
+	jz	%2
+} by {
+	; Peephole 700.6
+	mov	a,%1
+	jnb	acc.6,%2
+}
+
+replace {
+	mov	a,%1
+	rl	a
+	rl	a
+	anl	a,#0x01
+	mov	r%3,a
+	cjne	r%3,#0x01,%2
+} by {
+	; Peephole 700.6n
+	mov	a,%1
+	jnb	acc.6,%2
+}
+
+replace {
+	mov	a,%1
+	rl	a
+	rl	a
+	anl	a,#0x01
+	jnz	%2
+} by {
+	; Peephole 700.6nn
+	mov	a,%1
+	jb	acc.6,%2
+}
+
+replace {
+	mov	c,%1
+	clr	a
+	rlc	a
+	jz	%3
+} by {
+	; Peephole 700.5
+	jnb	%1,%3
+}
+
+replace {
+	mov	c,%1
+	clr	a
+	rlc	a
+	mov	%2,a
+	cjne	%2,#0x01,%3
+} by {
+	; Peephole 700.5n
+	jnb	%1,%3
+}
+
+replace {
+	mov	c,%1
+	clr	a
+	rlc	a
+	jnz	%3
+} by {
+	; Peephole 700.5nn
+	jb	%1,%3
+}
+
+replace {
+	swap	a
+	anl	a,#0x01
+	jz	%3
+} by {
+	; Peephole 700.4
+	jnb	acc.4,%3
+}
+
+replace {
+	swap	a
+	anl	a,#0x01
+	mov	%2,a
+	cjne	%2,#0x01,%3
+} by {
+	; Peephole 700.4n
+	jnb	acc.4,%3
+}
+
+replace {
+	swap	a
+	anl	a,#0x01
+	jnz	%3
+} by {
+	; Peephole 700.4nn
+	jb	acc.4,%3
+}
+
+replace {
+	mov	a,%1
+	rr	a
+	rr	a
+	anl	a,#0x01
+	jz	%3
+} by {
+	; Peephole 700.2
+	mov	a,%1
+	jnb	acc.2,%3
+}
+
+replace {
+	mov	a,%1
+	rr	a
+	rr	a
+	anl	a,#0x01
+	mov	%2,a
+	cjne	%2,#0x01,%3
+} by {
+	; Peephole 700.2n
+	mov	a,%1
+	jnb	acc.2,%3
+}
+
+replace {
+	mov	a,%1
+	rr	a
+	rr	a
+	anl	a,#0x01
+	jnz	%3
+} by {
+	; Peephole 700.2nn
+	mov	a,%1
+	jb	acc.2,%3
+}
+
+replace {
+	mov	a,%1
+	rr	a
+	anl	a,#0x01
+	jz	%3
+} by {
+	; Peephole 700.1
+	mov	a,%1
+	jnb	acc.1,%3
+}
+
+replace {
+	mov	a,%1
+	rr	a
+	anl	a,#0x01
+	mov	%2,a
+	cjne	%2,#0x01,%3
+} by {
+	; Peephole 700.1n
+	mov	a,%1
+	jnb	acc.1,%3
+}
+
+replace {
+	mov	a,%1
+	rr	a
+	anl	a,#0x01
+	jnz	%3
+} by {
+	; Peephole 700.1nn
+	mov	a,%1
+	jb	acc.1,%3
+}
+
+replace {
+	mov	a,%1
+	anl	a,#0x01
+	jz	%3
+} by {
+	; Peephole 700.0
+	mov	a,%1
+	jnb	acc.0,%3
+}
+
+replace {
+	mov	a,%1
+	anl	a,#0x01
+	mov	%2,a
+	cjne	%2,#0x01,%3
+} by {
+	; Peephole 700.0n
+	mov	a,%1
+	jnb	acc.0,%3
+}
+
+replace {
+	mov	a,%1
+	anl	a,#0x01
+	jnz	%3
+} by {
+	; Peephole 700.0
+	mov	a,%1
+	jb	acc.0,%3
+}
+
+replace {
+	jb	%1,%2
+	sjmp	%5
+%2:
+} by {
+	;	Peephole 108.f	removed sjmp by inverse jump logic
+	jnb	%1,%5
+%2:
+} if labelInRange(%5), labelRefCountChange(%2 -1)
+
+
+replace {
+	jnb	%1,%2
+	sjmp	%5
+%2:
+} by {
+	;	Peephole 108.g	removed sjmp by inverse jump logic
+	jb	%1,%5
+%2:
+} if labelInRange(%5), labelRefCountChange(%2 -1)
+
+replace {
+	mov	c,%1
+	jnc	%2
+} by {
+	jnb	%1,%2
+} if notUsed('C')
+
+replace {
+	mov	c,%1
+	jc	%2
+} by {
+	jb	%1,%2
+} if notUsed('C')
+
+replace {
+	anl	a,#0x01
+	jz	%1
+} by {
+	jnb	acc.0,%1
+} if notUsed('C'), notUsed('a')
+
+replace {
+	anl	a,#0x01
+	jnz	%1
+} by {
+	jb	acc.0,%1
+} if notUsed('C'), notUsed('a')
+
+
+replace {
+	mov	a,%1
+	%4	a,#%2
+	mov	%1,a
+} by {
+	; 	Peephole 800.1 optimize rmw logic
+	%4	%1,#%2
+} if same(%4 'anl' 'orl' 'xrl'), operandsNotRelated(%1 '@r0' '@r1'), notUsed('a')
+
+replace {
+	mov	a,%1
+	%4	a
+	mov	%1,a
+} by {
+	; 	Peephole 800.4 optimize rmw logic
+	%4	%1
+} if same(%4 'inc' 'dec'), notUsed('a')
+
+replace {
+	mov	a%1,r%2
+	mov	a,%1
+	%4	a
+	mov	r%2,a
+} by {
+	; 	Peephole 800.4_1 optimize rmw logic
+	%4	r%2
+} if same(%4 'inc' 'dec'), notUsed('a'), notUsed(%1)
+
+
+replace {
+	xch	a,r%1
+	%4	ar%1,#%2
+} by {
+	; 	Peephole 800.5 optimize rmw logic
+	%4	a,#%2
+	xch	a,r%1
+} if same(%4 'anl' 'orl' 'xrl')
+
+replace {
+	xch	a,r%1
+	%4	r%1
+} by {
+	; 	Peephole 800.6 optimize rmw logic
+	%4	a
+	xch	a,r%1
+} if same(%4 'inc' 'dec')
+
+replace {
+	xch	a,r%1
+	mov	a,r%1
+} by {
+	;   Peephole 800.7 remove xch
+	mov	r%1,a
+}
+
+replace restart {
+	xch	a,%1
+} by {
+	; Peephole 800.8 remove xch
+} if same(%1 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7' 'dpl' 'dph' 'b'), notUsed(%1), notUsed('a')
+
+replace restart {
+	xch	a,%1
+} by {
+	; Peephole 800.9 change xch -> mov
+	mov	a,%1
+} if same(%1 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7' 'dpl' 'dph' 'b'), notUsed(%1)
+
+replace restart {
+	xch	a,%1
+} by {
+	; Peephole 800.9 change xch -> mov
+	mov	%1,a
+} if same(%1 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7' 'dpl' 'dph' 'b'), notUsed('a')
+
+
+replace restart {
+	xch	a,%1
+} by {
+	; Peephole 800.10 remove xch
+} if same(%1 'a'), isSpecialRegister(%1 'acc')
+
+replace restart {
+	mov	%1,a
+	%4	%5,%6
+	cjne	%1,%2,%3
+} by {
+	; Peephole 6145
+	%4	%5,%6
+	mov	%1,a
+	cjne	a,%2,%3
+} if same(%1 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), operandsNotRelated(%4 'a' %1 %2 %3)
+
+
+replace restart {
+	mov	r%1,a
+	cjne	r%1,%2,%3
+} by {
+	; Peephole 800.4
+	mov	r%1,a
+	cjne	a,%2,%3
+}
+
+replace restart {
+	%1	a,%2
+	anl	a,#0x01
+	cjne	a,#0x01,%3
+} by {
+	; Peephole 6156
+	%1	a,%2
+	jnb	acc.0,%3
+} if notUsed('a')
+
+replace restart {
+	%1	a,%2
+	anl	a,#0x01
+	cjne	a,#0x00,%3
+} by {
+	; Peephole 6166
+	%1	a,%2
+	jb	acc.0,%3
+} if notUsed('a')
+
+
+replace restart {
+	clr	a
+	cjne	%1,#0x00,%2
+	inc	a
+%2:
+} by {
+	; Peephole 800_5909	optimized (r == 0) -> a
+	mov	a,%1
+	add	a,#0xff
+	cpl	c
+	clr	a
+	rlc	a
+} if labelRefCount(%2 1), labelRefCountChange(%1 -1), optimizeFor('!code-size')
+
+// prefer straight line code over jumps, at the same code size
+replace restart {
+	cjne	a,%1,%2
+%2:
+} by {
+	; Peephole 6200   optimized cjne -> subb
+	clr	c
+	subb	a,%1
+} if labelRefCount(%2 1), labelRefCountChange(%1 -1)
+
+
+replace restart {
+	anl	a,#0x01
+	add	a,#0xff
+} by {
+	; Peephole 800_5921	optimized acc.0 -> a
+	mov	c,acc.0
+} if notUsed('a')
+
+replace restart {
+	mov	c,acc.0
+	cpl	c
+	clr	a
+	rlc	a
+} by {
+	; Peephole 800_5931	optimized !acc.0 -> a
+	cpl	a
+	anl	a,#0x01
+} if notUsed('C')
+
+
+replace restart {
+	mov	c,acc.0
+	clr	a
+	rlc	a
+} by {
+	; Peephole 800_5941	optimized acc.0 -> a
+	anl	a,#0x01
+} if notUsed('C')
+
+replace restart {
+	clr	a
+	clr	c
+	rrc	a
+} by {
+	; Peephole 800.5 removed rrc
+	clr	a
+	clr	c
+}
+
+replace restart {
+	clr	a
+	%1	a
+} by {
+	; Peephole 800_6366 removed %1
+	clr	a
+} if same(%1 'rl' 'rr')
+
+replace restart {
+	rr	a
+	rr	a
+	mov	c,acc.0
+} by {
+	; Peephole 6170
+	mov	c,acc.2
+} if notUsed('a')
+
+replace restart {
+	rr	a
+	rr	a
+	%4	acc.0,%1
+} by {
+	; Peephole 6217
+	%4	acc.2,%1
+} if notUsed('a'), same(%4 'jb' 'jnb')
+
+replace restart {
+	rr	a
+	mov	c,acc.0
+} by {
+	; Peephole 225
+	mov	c,acc.1
+} if notUsed('a')
+
+replace restart {
+	rr	a
+	%4	acc.0,%1
+} by {
+	; Peephole 6233
+	%4	acc.1,%1
+} if notUsed('a'), same(%4 'jb' 'jnb')
+
+
+replace restart {
+	swap	a
+	mov	c,acc.0
+} by {
+	; Peephole 6242
+	mov	c,acc.4
+} if notUsed('a')
+
+replace restart {
+	swap	a
+	%4	acc.0,%1
+} by {
+	; Peephole 6250
+	%4	acc.4,%1
+} if notUsed('a'), same(%4 'jb' 'jnb')
+
+
+replace restart {
+	rl	a
+	rl	a
+	mov	c,acc.0
+} by {
+	; Peephole 6260
+	mov	c,acc.6
+} if notUsed('a')
+
+replace restart {
+	rl	a
+	rl	a
+	%4	acc.0,%1
+} by {
+	; Peephole 6269
+	%4	acc.6,%1
+} if notUsed('a'), same(%4 'jb' 'jnb')
+
+replace restart {
+	rl	a
+	mov	c,acc.0
+} by {
+	; Peephole 6277
+	mov	c,acc.7
+} if notUsed('a')
+
+replace restart {
+	rl	a
+	%4	acc.0,%1
+} by {
+	; Peephole 6285
+	%4	acc.7,%1
+} if notUsed('a'), same(%4 'jb' 'jnb')
+
+replace {
+	mov	r%1,#%2
+	orl	ar%1,#%3
+} by {
+	; Peephole 800.6 combined or
+	mov	r%1,#%4
+} if immdInRange(0 255 '|' %2 %3 %x4)
+
+replace {
+	mov	r%1,#%2
+	anl	ar%1,#%3
+} by {
+	; Peephole 800.7 combined and
+	mov	r%1,#%4
+} if immdInRange(0 255 '&' %2 %3 %x4)
+
+replace {
+	mov	r%1,#%2
+	xrl	ar%1,#%3
+} by {
+	; Peephole 800.8 combined xor
+	mov	r%1,#%4
+} if immdInRange(0 255 '^' %2 %3 %x4)
+
+replace restart {
+	mov	r%1,#0x00
+	mov	%2,%3
+	orl	a,r%1
+} by {
+	; Peephole 800.9 combined zero or
+	mov	r%1,#0x00
+	mov	%2,%3
+}
+
+replace restart {
+	mov	%1,#0x00
+	orl	a,%1
+} by {
+	; Peephole 800.10 combined zero or
+} if same(%1 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), notUsed(%1)
+
+replace restart {
+	%4	a%1,#%2
+	mov	a,%1
+} by {
+	; Peephole 6466
+	mov	a,%1
+	%4	a,#%2
+} if same(%4 'anl' 'orl' 'xrl'), notUsed(%1)
+
+replace restart {
+	mov	%1,a
+	%4	a%1,#%2
+} by {
+	; Peephole 6475
+	%4	a,#%2
+	mov	%1,a
+} if same(%4 'anl' 'orl' 'xrl'), notUsed('a')
+
+replace restart {
+	mov	a,#%1
+	%4	a%2,a
+} by {
+	; Peephole 6726
+	%4	a%2,#%1
+} if same(%4 'anl' 'orl' 'xrl'), notUsed('a')
+
+replace restart {
+	%4	a%1,a
+	mov	a,%1
+} by {
+	%4	a,%1
+} if notUsed(%1)
+
+replace restart {
+	mov	a%1,%2
+	mov	a,%1
+	%4	%3,a
+} by {
+	mov	a,%2
+	%4	%3,a
+} if notUsed(%1)
+
+replace restart {
+	mov	a%1,%2
+	mov	a,#%3
+	%4	a,%1
+} by {
+	; Peephole 6485
+	mov	a,%2
+	%4	a,#%3
+} if notUsed(%1)
+
+replace restart {
+	mov	a%1,%2
+	mov	a,%1
+} by {
+	; Peephole 6748
+	mov	a,%2
+	mov	%1,a
+}
+
+replace restart {
+	anl	a,#%1
+	xrl	a,#%1
+} by {
+	; Peephole 6761
+	cpl	a
+	anl	a,#%1
+}
+
+// original sequence: 7 bytes.
+// replacement: 7 bytes.
+// branchless is usually faster at same code size.
+replace restart {
+	cjne	%1,%2,%3
+	setb	c
+	sjmp	%4
+%3:
+	clr	c
+%4:
+} by {
+	; Peephole 6499
+	xch	a,%1
+	xrl	a,%2
+	add	a,#0xff
+	xch	a,%1
+	cpl	c
+%4:
+} if notUsed(%1), labelRefCount(%3 1), labelRefCountChange(%3 -1), labelRefCountChange(%4 -1)
+
+replace restart {
+	anl	a%1,#%4
+	mov	a%2,%3
+	anl	a%2,#%4
+	mov	a,%1
+	cjne	a,a%2,%5
+} by {
+	; Peephole 6793
+	mov	a,%1
+	xrl	a,%3
+	anl	a,#%4
+	jnz	%5
+} if notUsed('a'), notUsed(%2), notUsed('C')
+
+replace restart {
+	mov	a,%1
+	mov	a,%2
+} by {
+	; peephole 6563   removed redundant load
+	mov	a,%2
+} if notVolatile(%1)
+
+
+// 147: Fix compiler output to comply with 8051 instruction set.
+replace {
+	%3	r%1,%2
+} by {
+	;	Peephole 147.a	changed target address mode r%1 to ar%1
+	%3	ar%1,%2
+} if same(%3 'anl' 'orl' 'xrl')
 
 // should be one of the last peepholes
 replace{
