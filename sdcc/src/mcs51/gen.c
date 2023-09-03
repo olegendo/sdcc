@@ -1407,6 +1407,47 @@ aopGetUsesAcc (operand * oper, int offset)
 }
 
 /*-------------------------------------------------------------------*/
+/* emit_dec_dptr - emit code to decrement the dptr                   */
+/*-------------------------------------------------------------------*/
+static void
+emit_add_dptr (int addend)
+{
+  if (addend == 0)
+    return;
+
+  /* call + ret is at least ~8 cycles on most systems.
+     default impl. of __decdptr is ~9 cycles.
+     inline sequence is ~16 cycles on most systems.  */
+
+  /* FIXME: try to eliminate push/pop of psw if it't not needed  */
+  if (addend >= 16
+      || (!optimize.codeSize && addend < -1) || addend <= -16/3)
+    {
+      emitcode ("push", "psw");
+      emitcode ("xch", "a,dpl");
+      emitcode ("add", "a,#!constbyte", ((unsigned int)addend >> 0) & 0xFF);
+      emitcode ("xch", "a,dpl");
+      emitcode ("xch", "a,dph");
+      emitcode ("addc", "a,#!constbyte", ((unsigned int)addend >> 8) & 0xFF);
+      emitcode ("xch", "a,dph");
+      emitcode ("pop", "psw");    // 16 bytes
+      return;
+    }
+
+  while (addend < 0)
+    {
+      emitcode ("lcall", "__decdptr");  // 3 bytes
+      ++addend;
+    }
+
+  while (addend > 0)
+    {
+      emitcode ("inc", "dptr"); // 1 byte
+      --addend;
+    }
+}
+
+/*-------------------------------------------------------------------*/
 /* aopGet - for fetching value of the aop                            */
 /*-------------------------------------------------------------------*/
 /*
@@ -1483,18 +1524,7 @@ aopGet (operand * oper, int offset, bool bit16, bool dname)
             }
           else
             {
-              while (offset > aop->coff)
-                {
-                  emitcode ("inc", "dptr");
-                  aop->coff++;
-                }
-
-              while (offset < aop->coff)
-                {
-                  emitcode ("lcall", "__decdptr");
-                  aop->coff--;
-                }
-
+              emit_add_dptr (offset - aop->coff);
               aop->coff = offset;
               if (aop->code)
                 {
@@ -1718,18 +1748,7 @@ aopPut (operand * result, const char *s, int offset)
       /* if not in accumulator */
       MOVA (s);
 
-      while (offset > aop->coff)
-        {
-          aop->coff++;
-          emitcode ("inc", "dptr");
-        }
-
-      while (offset < aop->coff)
-        {
-          aop->coff--;
-          emitcode ("lcall", "__decdptr");
-        }
-
+      emit_add_dptr (offset - aop->coff);
       aop->coff = offset;
 
       emitcode ("movx", "@dptr,a");
@@ -1920,10 +1939,7 @@ reAdjustPreg (asmop * aop)
         emitcode ("dec", "%s", aop->aopu.aop_ptr->name);
       break;
     case AOP_DPTR:
-      while (aop->coff--)
-        {
-          emitcode ("lcall", "__decdptr");
-        }
+      emit_add_dptr (-aop->coff);
       break;
     }
   aop->coff = 0;
