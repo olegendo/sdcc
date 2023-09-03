@@ -5066,6 +5066,31 @@ replace restart {
 	;	Peephole 303 used a directly instead of going through %1
 } if notVolatile(%1), notUsed(%1)
 
+replace {
+	lcall	__sdcc_banked_call
+	ljmp	__sdcc_banked_ret
+} by {
+	;	Peephole 400.a_b	replaced lcall/ret with ljmp
+	ljmp	__sdcc_banked_jmp
+} if optimizeReturn()
+
+replace {
+	lcall	__sdcc_banked_call
+%2:
+	ljmp	__sdcc_banked_ret
+} by {
+	;	Peephole 400.b_b	replaced lcall/ret with ljmp
+	ljmp	__sdcc_banked_jmp
+} if optimizeReturn(), labelRefCount(%2 0)
+
+replace {
+	ljmp	__sdcc_banked_call
+	ljmp	__sdcc_banked_ret
+} by {
+	;	Peephole 400.c_b	replaced lcall/ret with ljmp
+	ljmp	__sdcc_banked_call
+} if optimizeReturn()
+
 // applies to: void test( char c ) { if( c ) func1(); else func2(); }
 replace {
 	lcall	%1

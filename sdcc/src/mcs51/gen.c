@@ -3865,6 +3865,7 @@ genCall (iCode * ic)
   const bool bigreturn = IS_STRUCT (dtype->next);
   const bool noreturn = SPEC_NORETURN (etype);
   const char *call = noreturn ? "ljmp" : "lcall";
+  const char* call_banked = noreturn ? "__sdcc_banked_jmp" : "__sdcc_banked_call";
 
   /* if send set is not empty then assign */
   if (_G.sendSet)
@@ -3929,7 +3930,7 @@ genCall (iCode * ic)
               emitcode ("mov", "r1,#(%s >> 8)", name);
               emitcode ("mov", "r2,#((%s + 0x800000) >> 16)", name);
             }
-          emitcode (call, "__sdcc_banked_call");
+          emitcode (call, call_banked);
         }
     }
   else
@@ -4081,6 +4082,7 @@ genPcall (iCode * ic)
   const bool bigreturn = IS_STRUCT (dtype->next);
   const bool noreturn = SPEC_NORETURN (etype);
   const char *call = noreturn ? "ljmp" : "lcall";
+  const char* call_banked = noreturn ? "__sdcc_banked_jmp" : "__sdcc_banked_call";
 
   /* if caller saves & we have not saved then */
   if (!ic->regsSaved && !noreturn)
@@ -4128,7 +4130,7 @@ genPcall (iCode * ic)
               emitcode ("mov", "r0,#%s", aopLiteralLong (OP_VALUE (IC_LEFT (ic)), 0, 1));
               emitcode ("mov", "r1,#%s", aopLiteralLong (OP_VALUE (IC_LEFT (ic)), 1, 1));
               emitcode ("mov", "r2,#%s", aopLiteralLong (OP_VALUE (IC_LEFT (ic)), 2, 1));
-              emitcode (call, "__sdcc_banked_call");
+              emitcode (call, call_banked);
             }
         }
       else
@@ -4187,7 +4189,7 @@ genPcall (iCode * ic)
                   emitpop ("ar0");
                 }
               /* make the call */
-              emitcode (call, "__sdcc_banked_call");
+              emitcode (call, call_banked);
             }
         }
       else if (_G.sendSet)      /* the send set is not empty */
