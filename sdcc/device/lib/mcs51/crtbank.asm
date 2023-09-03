@@ -2,6 +2,7 @@
 ;  crtbank.asm - C run-time: bank switching
 ;
 ;  Copyright (C) 2005, Maarten Brock
+;                2023, Oleg Endo
 ;
 ;  This library is free software; you can redistribute it and/or modify it
 ;  under the terms of the GNU General Public License as published by the
@@ -69,6 +70,18 @@ __sdcc_banked_call::
 	orl	_PSBANK,a	;select bank
 	xch	a,r0		;restore Acc
 	ret			;make the call
+
+__sdcc_banked_jmp::
+	xch	a,r0		;save Acc in r0, do not assume any register bank
+	push	acc		;push LSB address
+	mov	a,r1
+	push	acc		;push MSB address
+	mov	a,r2		;get new bank
+	anl	a,#0x0F		;remove storage class indicator
+	anl	_PSBANK,#0xF0
+	orl	_PSBANK,a	;select bank
+	xch	a,r0		;restore Acc
+	ret			;make the jump
 
 __sdcc_banked_ret::
 	pop	_PSBANK		;restore bank

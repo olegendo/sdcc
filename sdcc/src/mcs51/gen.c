@@ -3445,7 +3445,10 @@ genCall (iCode * ic)
           ic->rCallUsed = bitVectSetBit (ic->rCallUsed, R1_IDX);
           ic->rCallUsed = bitVectSetBit (ic->rCallUsed, R2_IDX);
 
-          emitcode (callinsn, "__sdcc_banked_call");
+          if (ic->tailcall)
+            emitcode (callinsn, "__sdcc_banked_jmp");
+          else
+            emitcode (callinsn, "__sdcc_banked_call");
         }
     }
   else
