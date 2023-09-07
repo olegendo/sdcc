@@ -578,10 +578,10 @@ mcs51isSpecialRegister (const char *op1, const char *reg)
   #define dbglog_insn_regs(...) do { } while (0)
 #endif
 
-static void
+static const mcs51operanddata*
 updateOpRW (asmLineNode *aln, const char *op_in, const char *optype)
 {
-  mcs51operanddata *opdat;
+  const mcs51operanddata *opdat;
 
   /* Ignore dots or brackets in operand (bit numbes) for operand table search.
      But remember that it's a bit access for special case handling.  */
@@ -727,6 +727,8 @@ retry_opdat_search:
             }
         }
     }
+
+  return opdat;
 }
 
 typedef struct mcs51opcodedata
@@ -870,14 +872,21 @@ asmLineNodeFromLineNode (lineNode *ln)
 
   if (opdat)
     {
-      updateOpRW (aln, op1, opdat->op1type);
-      updateOpRW (aln, op2, opdat->op2type);
+      const mcs51operanddata* op1dat = updateOpRW (aln, op1, opdat->op1type);
+      const mcs51operanddata* op2dat = updateOpRW (aln, op2, opdat->op2type);
       if (strchr(opdat->pswtype,'r'))
         aln->regsRead = bitVectSetBit (aln->regsRead, CND_IDX);
       if (strchr(opdat->pswtype,'w'))
         aln->regsWritten = bitVectSetBit (aln->regsWritten, CND_IDX);
       if (opdat->implicit_rd_idx >= 0)
         aln->regsRead = bitVectSetBit (aln->regsRead, opdat->implicit_rd_idx);
+
+      /* special case: 'subb a,acc'
+         ignore the ineffective read on 'a'  */
+      if (!strcmp (opdat->name, "subb")
+          && op1dat && op1dat->regIdx1 == A_IDX
+          && op2dat && op2dat->regIdx1 == A_IDX)
+        bitVectUnSetBit (aln->regsRead, A_IDX);
     }
 
   if (!strcmp (inst, "lcall") || !strcmp (inst, "ljmp") || !strcmp (inst, "acall"))
