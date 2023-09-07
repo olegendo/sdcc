@@ -2585,7 +2585,18 @@ glue (void)
       else if(TARGET_PDK_LIKE)
         fprintf (asmFile, "\tgoto\t_main\n");
       else
-        fprintf (asmFile, "\t%cjmp\t_main\n", options.acall_ajmp ? 'a' : 'l');        /* needed? */
+        {
+          if (IFFUNC_ISNORETURN (mainf->type))
+            fprintf (asmFile, "\t%cjmp\t_main\n", options.acall_ajmp ? 'a' : 'l');
+          else
+            {
+              /* for simulator runs it can be useful to have a main function that
+                 actually returns.  in usim set 'selfjump_stop' option to '1' to
+                 terminate the program instead of having it looping indefinitely.  */
+              fprintf (asmFile, "\t%ccall\t_main\n", options.acall_ajmp ? 'a' : 'l');
+              fprintf (asmFile, "\t%cjmp\t.\n", options.acall_ajmp ? 'a' : 'l');
+            }
+        }
       fprintf (asmFile, ";\treturn from main will return to caller\n");
     }
   /* copy over code */
