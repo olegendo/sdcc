@@ -7126,6 +7126,25 @@ replace restart {
 } if notUsed('a'), notUsed(%2), notUsed('C')
 
 replace restart {
+	anl	a,#0x01
+	mov	b,%1
+	mul	ab
+} by {
+	; Peephole 7133
+	rrc	a
+	subb	a,acc
+	anl	a,%1
+	mov	b,#0
+} if notUsed('C')
+
+replace restart {
+	rl	a
+	rrc	a
+} by {
+	rlc	a
+} if notUsed('a')
+
+replace restart {
 	mov	a,%1
 	mov	a,%2
 } by {
