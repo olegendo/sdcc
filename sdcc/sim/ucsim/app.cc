@@ -114,6 +114,7 @@ enum run_states {
 int
 cl_app::run(void)
 {
+  int ret= 0;
   int done= 0;
   double input_last_checked= 0;
   class cl_option *o= options->get_option("go");
@@ -193,11 +194,14 @@ cl_app::run(void)
 		sim->uc->touch();
 	    }
 	  if (sim->state & SIM_QUIT)
+	  {
+	    ret= sim->retval;
 	    done= 1;
+	   }
 	}
       commander->check();
     }
-  return(0);
+  return ret;
 }
 
 void

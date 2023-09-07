@@ -1745,6 +1745,7 @@ cl_51core::do_inst(int step)
 
       if ((result == resGO) && (PC == PCsave) && stop_selfjump)
 	{
+	  sim->retval = (sfr->get(DPH) << 8) | sfr->get(DPL);
 	  result= resSELFJUMP;
 	  sim->stop(result);
 	  break;
