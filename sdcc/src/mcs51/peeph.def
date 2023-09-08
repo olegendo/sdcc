@@ -6072,7 +6072,24 @@ replace restart {
 	;	Peephole 300	pop ar%1 removed
 } if deadMove(%1)
 
-// N.B. this can breake callee-save if the call reg uses bits
+// try to eliminate unneeded push-pop around a function call, if the
+// popped register is not used after the call.
+// this might be risky as we don't really know for sure whether those
+// push-pop pairs are real or whether it's an argument push + stack adjust
+// or something else.
+// this will also miss lots of opportunities, because it doesn't see across
+// other insns that might be interleaved.  and it also doesn't check whether
+// the pushed value is used by the function call (as an input parameter on
+// the stack).
+replace restart {
+	push	%1
+	%2	%3
+	pop	%4
+} by {
+	%2	%3
+} if same(%2 'lcall' 'acall'), notSame(%1 'acc'), notUsed(%4)
+
+// N.B. this can brake callee-save if the call reg uses bits
 //      aren't set properly.
 replace restart {
 	pop	a%1
@@ -7152,6 +7169,44 @@ replace restart {
 	mov	a,%2
 } if notVolatile(%1)
 
+replace restart {
+	mov	%1,%2
+} by {
+	mov	dph,%2
+} if notSame(%1 'dph'), isSpecialRegister(%1 'dph')
+
+replace restart {
+	mov	%1,%2
+} by {
+	mov	dpl,%2
+} if notSame(%1 'dpl'), isSpecialRegister(%1 'dpl')
+
+replace restart {
+	mov	a%1,@%2
+	mov	a,%3
+	%4	a%1,a
+} by {
+	mov	a,%3
+	%4	a,@%2
+	mov	%1,a
+} if same(%4 'anl' 'orl' 'xrl'), notUsed('a')
+
+replace restart {
+	dec	%1
+	%2	%3
+	mov	a,%1
+	jnz	%4
+} by {
+	%2	%3
+	djnz	%1,%4
+} if same(%1 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), operandsNotRelated(%1 %3)
+
+replace restart {
+	mov	a%1,%2
+	mov	a%3,%1
+} by {
+	mov	a%3,%2
+} if notUsed(%1), operandsNotRelated(%1 %2 %3)
 
 // 147: Fix compiler output to comply with 8051 instruction set.
 replace {
