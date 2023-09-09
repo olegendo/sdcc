@@ -3290,6 +3290,17 @@ matchLine (char *s, const char *d, hTab ** vars)
 }
 
 /*-----------------------------------------------------------------*/
+/* getCurrentlyProcessingPeepholeRule                              */
+/*-----------------------------------------------------------------*/
+static peepRule * curPeeprule = NULL;
+
+const peepRule *
+getCurrentlyProcessingPeepholeRule (void)
+{
+  return curPeeprule;
+}
+
+/*-----------------------------------------------------------------*/
 /* matchRule - matches a all the rule lines                        */
 /*-----------------------------------------------------------------*/
 static bool
@@ -3298,6 +3309,8 @@ matchRule (lineNode * pl,
            peepRule * pr,
            lineNode * head)
 {
+  curPeeprule = pr;
+
   lineNode *spl;                /* source pl */
   lineNode *rpl;                /* rule peep line */
 
@@ -3990,6 +4003,7 @@ peepHole (lineNode ** pls)
                 }
 
               freeTrace (&_G.values);
+              curPeeprule = NULL;
             }
         }
     } while (restart == TRUE);

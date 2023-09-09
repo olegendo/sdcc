@@ -59,4 +59,9 @@ void peepHole (lineNode **);
 
 const char * StrStr (const char * str1, const char * str2);
 
+/* returns the peephole pattern that is currently being processed.
+   this can be used for compiler internal debugging.
+   returns NULL if not currently processing a peephole rule.  */
+const peepRule * getCurrentlyProcessingPeepholeRule (void);
+
 #endif
