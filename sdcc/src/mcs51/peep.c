@@ -317,8 +317,22 @@ scan4op (lineNode **pl, const char *pReg, const char *untilOp,
   if (rIdx < 0)
     {
       /* This can happen if a wrong register name is passed from the peephole pattern. */
-      char msg[256];
-      sprintf (msg, "scan4op -- got invalid register name: '%s'", pReg);
+      char msg[1024*2];
+      char* out_ptr = msg;
+      char* const out_end = msg + sizeof (msg);
+
+      out_ptr += snprintf (out_ptr, out_end - out_ptr,
+        "scan4op -- got invalid register name: '%s'", pReg);
+
+      const peepRule* pr = getCurrentlyProcessingPeepholeRule ();
+      if (pr)
+        {
+          out_ptr += snprintf (out_ptr, out_end - out_ptr, "in peephole pattern:\n");
+
+          for (lineNode* l = pr->match; l; l = l->next)
+            out_ptr += snprintf (out_ptr, out_end - out_ptr, "   %s\n", l->line);
+        }
+
       werror (W_INTERNAL_ERROR, __FILE__, __LINE__, msg);
       return S4O_ABORT;
     }
