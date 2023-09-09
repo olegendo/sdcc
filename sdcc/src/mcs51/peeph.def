@@ -6310,7 +6310,7 @@ replace restart {
 	xch	a,%7
 	%1	a,%2
 	%3	a,%7
-} if notUsed(%5), operandsNotRelated(%5 %2 %7), same(%7 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), same(%5 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7')
+} if operandsNotRelated(%5 %2 %7), same(%7 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), same(%5 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), notUsed(%5)
 
 replace {
 	lcall	__sdcc_banked_call
@@ -7126,7 +7126,7 @@ replace restart {
 	xch	a,%1
 	cpl	c
 %4:
-} if notUsed(%1), labelRefCount(%3 1), labelRefCountChange(%3 -1), labelRefCountChange(%4 -1)
+} if notSame(%1 '@r0' '@r1'), notUsed(%1), labelRefCount(%3 1), labelRefCountChange(%3 -1), labelRefCountChange(%4 -1)
 
 replace restart {
 	anl	a%1,#%4
