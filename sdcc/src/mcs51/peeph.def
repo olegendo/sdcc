@@ -7208,6 +7208,56 @@ replace restart {
 	mov	a%3,%2
 } if notUsed(%1), operandsNotRelated(%1 %2 %3)
 
+replace restart {
+	mov	a,%1
+	clr	c
+	rrc	a
+	mov	%1,a
+	mov	c,%2
+	clr	a
+	rrc	a
+	orl	a%1,a
+} by {
+	; Peephole 7221 -- optimized right shift + or msb
+	mov	a,%1
+	mov	c,%2
+	rrc	a
+	mov	%1,a
+} if notUsed('a'), notUsed('C')
+
+replace restart {
+	mov	c,%1
+	clr	a
+	rrc	a
+	mov	%2,a
+	mov	a,%3
+	clr	c
+	rrc	a
+	orl	a%2,a
+} by {
+	; Peephole 7238 -- optimized right shift + or msb
+	mov	c,%1
+	mov	a,%3
+	rrc	a
+	mov	%2,a
+} if notUsed('a'), notUsed('C')
+
+replace restart {
+	mov	a,%1
+	add	a,%1
+	mov	%1,a
+	mov	c,%2
+	clr	a
+	rlc	a
+	orl	a%1,a
+} by {
+	; Peephole 7254 -- optimized left shift + or lsb
+	mov	a,%1
+	mov	c,%2
+	rlc	a
+	mov	%1,a
+} if notUsed('a'), notUsed('C')
+
 // 147: Fix compiler output to comply with 8051 instruction set.
 replace {
 	%3	r%1,%2
