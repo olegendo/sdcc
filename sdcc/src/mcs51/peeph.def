@@ -7258,6 +7258,23 @@ replace restart {
 	mov	%1,a
 } if notUsed('a'), notUsed('C')
 
+replace restart {
+	mov	a,%1
+	mov	c,acc.0
+	mov	%2,c
+	mov	a,%1
+	clr	c
+	rrc	a
+	mov	%1,a
+} by {
+	; Peephole 7267 -- optimized right shift + bit out lsb
+	mov	a,%1
+	clr	c
+	rrc	a
+	mov	%2,c
+	mov	%1,a
+} if notUsed('C')
+
 // 147: Fix compiler output to comply with 8051 instruction set.
 replace {
 	%3	r%1,%2
