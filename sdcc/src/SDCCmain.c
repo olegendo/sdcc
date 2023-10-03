@@ -70,6 +70,7 @@ set *linkOptionsSet = NULL;     /* set of linker options */
 set *libFilesSet = NULL;
 set *libPathsSet = NULL;
 set *relFilesSet = NULL;
+set *lkFileSet = NULL;
 set *dataDirsSet = NULL;        /* list of data search directories */
 set *includeDirsSet = NULL;     /* list of include search directories */
 set *userIncDirsSet = NULL;     /* list of user include directories */
@@ -738,6 +739,14 @@ processFile (char *s)
       dbuf_destroy (&path);
 
       addSet (&relFilesSet, Safe_strdup (s));
+      return;
+    }
+
+  if (STRCASECMP (extp, ".lk") == 0)
+    {
+      dbuf_destroy (&ext);
+      dbuf_destroy (&path);
+      addSet (&lkFileSet, Safe_strdup (s));
       return;
     }
 
@@ -1616,11 +1625,16 @@ parseCmdLine (int argc, char **argv)
         {
           werror (W_NO_FILE_ARG_IN_C1, s);
         }
+      for (s = setFirstItem (lkFileSet); s != NULL; s = setNextItem (lkFileSet))
+        {
+          werror (W_NO_FILE_ARG_IN_C1, s);
+        }
       for (s = setFirstItem (libFilesSet); s != NULL; s = setNextItem (libFilesSet))
         {
           werror (W_NO_FILE_ARG_IN_C1, s);
         }
       deleteSet (&relFilesSet);
+      deleteSet (&lkFileSet);
       deleteSet (&libFilesSet);
 
       if (options.cc_only || noAssemble || preProcOnly)
@@ -1992,6 +2006,32 @@ linkEdit (char **envp)
 
       /* put in all object files */
       fputStrSet (lnkfile, relFilesSet);
+
+      /* include additional .lk files */
+      for (s = setFirstItem (lkFileSet); s != NULL; s = setNextItem (lkFileSet))
+        {
+          FILE* f = fopen (s, "r");
+
+          if (f == NULL)
+            {
+              werror (E_INPUT_FILE_OPEN_ERR, s, strerror (errno));
+              exit (EXIT_FAILURE);
+            }
+          else
+            {
+              char buf[1024];
+
+              while (true)
+                {
+                  int rd_count = fread (buf, 1, sizeof (buf), f);
+                  if (rd_count <= 0)
+                    break;
+                  fwrite (buf, 1, rd_count, lnkfile);
+                }
+
+              fclose (f);
+            }
+        }
 
       fprintf (lnkfile, "\n-e\n");
       fclose (lnkfile);
@@ -2772,7 +2812,7 @@ main (int argc, char **argv, char **envp)
     doPrintSearchDirs ();
 
   /* if no input then printUsage & exit */
-  if (!options.c1mode && !fullSrcFileName && peekSet (relFilesSet) == NULL)
+  if (!options.c1mode && !fullSrcFileName && peekSet (relFilesSet) == NULL && peekSet (lkFileSet) == NULL)
     {
       if (options.printSearchDirs)
         exit (EXIT_SUCCESS);
@@ -2839,7 +2879,8 @@ main (int argc, char **argv, char **envp)
   if (options.debug && debugFile)
     debugFile->closeFile ();
 
-  if (!options.cc_only && !fatalError && !noAssemble && !options.c1mode && (fullSrcFileName || peekSet (relFilesSet) != NULL))
+  if (!options.cc_only && !fatalError && !noAssemble && !options.c1mode
+      && (fullSrcFileName || peekSet (relFilesSet) != NULL || peekSet (lkFileSet) != NULL))
     {
       if (options.verbose)
         printf ("sdcc: Calling linker...\n");
