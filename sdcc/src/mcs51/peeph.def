@@ -1,3 +1,12 @@
+// FIXME: this can be emitted by immdInRange
+//        canonicalize 0xn -> 0x0n for other patterns
+replace {
+	%2	a,#0x%1
+} by {
+	%2	a,#0x0%1
+} if same(%1 '0' '1' '2' '3' '4' '5' '6' '7' '8' '9' 'a' 'b' 'c' 'd' 'e' 'f')
+
+
 // added by Jean Louis VERN for
 // his shift stuff
 replace {
@@ -1101,6 +1110,20 @@ replace restart {
 	; peephole 850 removed carry bit round trip from unpack-pack bits
 	%4	%5,%6
 	mov	c,%1
+	cpl	c
+} if operandsNotRelated('a' %5 %6), notUsed('a')
+
+replace restart {
+	rrc	a
+	cpl	c
+	clr	a
+	rlc	a
+	%4	%5,%6
+	rrc	a
+} by {
+	; peephole 850.1 removed carry bit round trip from unpack-pack bits
+	%4	%5,%6
+	rrc	a
 	cpl	c
 } if operandsNotRelated('a' %5 %6), notUsed('a')
 
@@ -6246,6 +6269,65 @@ replace restart {
 } if operandsNotRelated('a' %5 %6), notUsed('a')
 
 
+replace restart {
+	anl	a,#0x01
+	add	a,#0xff
+} by {
+	; peephole 6261
+	mov	c,acc.0
+} if notUsed('a')
+
+replace restart {
+	clr	a
+	rlc	a
+	add	a,#0xff
+} by {
+	; peephole 6270
+} if notUsed('a')
+
+replace restart {
+	rr	a
+	rr	a
+	mov	c,acc.0
+} by {
+	mov	c,acc.2
+} if notUsed('a')
+
+replace restart {
+	rr	a
+	mov	c,acc.0
+} by {
+	mov	c,acc.1
+} if notUsed('a')
+
+replace restart {
+	swap	a
+	mov	c,acc.0
+} by {
+	mov	c,acc.4
+} if notUsed('a')
+
+replace restart {
+	rl	a
+	mov	c,acc.0
+} by {
+	rlc	a
+} if notUsed('a')
+
+replace restart {
+	rl	a
+	rlc	a
+} by {
+	mov	c,acc.6
+} if notUsed('a')
+
+replace restart {
+	mov	c,acc.0
+} by {
+	; Peephole 7343
+	rrc	a
+} if notUsed('a')
+
 replace {
 	%4	c
 } by {
@@ -6437,16 +6519,14 @@ replace {
 }
 
 replace {
-	mov	a,%1
 	rl	a
 	rl	a
 	anl	a,#0x01
 	jz	%2
 } by {
 	; Peephole 700.6
-	mov	a,%1
 	jnb	acc.6,%2
-}
+} if notUsed('a')
 
 replace {
 	mov	a,%1
@@ -6462,16 +6542,14 @@ replace {
 }
 
 replace {
-	mov	a,%1
 	rl	a
 	rl	a
 	anl	a,#0x01
 	jnz	%2
 } by {
 	; Peephole 700.6nn
-	mov	a,%1
 	jb	acc.6,%2
-}
+} if notUsed('a')
 
 replace {
 	mov	c,%1
@@ -6874,6 +6952,30 @@ replace restart {
 	anl	a,#0x01
 } if notUsed('C')
 
+replace restart {
+	rrc	a
+	cpl	c
+	clr	a
+	rlc	a
+} by {
+	; Peephole 800_5931.1	optimized !acc.0 -> a
+	cpl	a
+	anl	a,#0x01
+} if notUsed('C')
+
+replace restart {
+	rlc	a
+	cpl	c
+	clr	a
+	rlc	a
+} by {
+	; Peephole 800_5931.2	optimized !acc.0 -> a
+	rl	a
+	cpl	a
+	anl	a,#0x01
+} if notUsed('C')
+
+
 
 replace restart {
 	mov	c,acc.0
@@ -7274,6 +7376,27 @@ replace restart {
 	mov	%2,c
 	mov	%1,a
 } if notUsed('C')
+
+replace restart {
+	mov	%1,#0x00
+	mov	%2,#0x00
+	orl	a%1,%3
+} by {
+	; peephole 7365
+	mov	%1,%3
+	mov	%2,#0x00
+}
+
+replace restart {
+	mov	%1,#0x00
+	mov	%2,#0x00
+	orl	a%1,%3
+	orl	a%2,%4
+} by {
+	; peephole 7376
+	mov	%1,%3
+	mov	%2,%4
+}
 
 // 147: Fix compiler output to comply with 8051 instruction set.
 replace {
