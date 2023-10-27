@@ -6109,6 +6109,7 @@ replace restart {
 	%2	%3
 	pop	%4
 } by {
+	; peephole 6112
 	%2	%3
 } if same(%2 'lcall' 'acall'), notSame(%1 'acc'), notUsed(%4)
 
@@ -6129,12 +6130,6 @@ replace restart {
 } if deadMove(%1)
 
 replace restart {
-	mov	r%1,%2
-} by {
-	;	Peephole 302	mov r%1,%2 removed
-} if notVolatile(%2), deadMove(%1)
-
-replace restart {
 	mov	ar%1,%2
 } by {
 	;	Peephole 303	mov ar%1,%2 removed
@@ -6144,7 +6139,17 @@ replace restart {
 	mov	%1,%2
 } by {
 	;	Peephole 304	mov %1,%2 removed
-} if notVolatile(%2), same(%1 'a' 'dpl' 'dph' 'b'), notUsed(%1)
+} if notVolatile(%2), same(%1 'a' 'dpl' 'dph' 'b' 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), notUsed(%1)
+
+// pattern 304 catches most dead loads of immediates.
+// however direct addresses of variables might not always pass the notVolatile
+// it seems and will get stuck around.
+// FIXME: dptr not supported as register, but it should be.
+replace restart {
+	mov	%1,#%2
+} by {
+	; peephole 304.1
+} if same(%1 'a' 'dpl' 'dph' 'b' 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), notUsed(%1)
 
 replace {
 	clr	a
@@ -6366,10 +6371,10 @@ replace restart {
 } if same(%4 'anl' 'orl')
 
 replace restart {
-	movx	a,@dptr
+	movx	a,%1
 } by {
 	;	Peephole 306.a  removed unused movx load
-} if notUsed('a'), notVolatile()
+} if same(%1 '@dptr'), notUsed('a'), notVolatile(%1)
 
 replace restart {
 	inc	dptr
@@ -6865,7 +6870,7 @@ replace restart {
 	%4	%5,%6
 	mov	%1,a
 	cjne	a,%2,%3
-} if same(%1 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), operandsNotRelated(%4 'a' %1 %2 %3)
+} if same(%1 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), operandsNotRelated(%4 'a' %1 %2 %3 %5)
 
 
 replace restart {
@@ -7210,6 +7215,22 @@ replace restart {
 	anl	a,#%1
 }
 
+// x == #imm -> c
+replace restart {
+	cjne	%1,#%2,%3
+	setb	c
+	sjmp	%4
+%3:
+	clr	c
+%4:
+} by {
+	mov	a,%1
+	xrl	a,#%2
+	add	a,#0xff
+	cpl	c
+%4:
+} if notUsed('a'), labelRefCount(%3 1), labelRefCountChange(%3 -1), labelRefCountChange(%4 -1)
+
 // original sequence: 7 bytes.
 // replacement: 7 bytes.
 // branchless is usually faster at same code size.
@@ -7397,6 +7418,333 @@ replace restart {
 	mov	%1,%3
 	mov	%2,%4
 }
+
+replace restart {
+	clr	a
+	mov	r%6,a
+	mov	r%4,a
+	mov	a,r%7
+	orl	ar%6,a
+	mov	a,r%4
+	orl	ar%5,a
+} by {
+	; peephole 7410
+	mov	r%6,ar%7
+} if notUsed('a'), notUsed(%4), operandsNotRelated(%6 %4 %5 %7)
+
+
+replace restart {
+	clr	a
+	mov	r%7,a
+	mov	r%4,a
+	mov	a,r%6
+	orl	ar%7,a
+	mov	a,r%4
+	orl	a,r%5
+} by {
+	mov	r%7,ar%6
+	mov	a,r%5
+} if notUsed(%4)
+
+replace restart {
+	mov	r%5,a
+	mov	ar%4,r%6
+	mov	r%3,ar%5
+	mov	ar%5,r%4
+} by {
+	; peephole 7414
+	mov	r%3,a
+	mov	ar%4,r%6
+	mov	ar%5,r%6
+} if operandsNotRelated(%3 %4 %5 %6)
+
+replace restart {
+	mov	r%6,a
+	mov	ar%5,%r7
+	mov	r%7,ar%6
+} by {
+	; peephole 7425
+	mov	ar%5,r%7
+	mov	r%6,a
+	mov	r%7,a
+} if operandsNotRelated(%5 %6 %7)
+
+replace restart {
+	movx	a,@dptr
+	mov	r%7,a
+	movx	a,@dptr
+	mov	ar%5,r%7
+	mov	r%7,a
+} by {
+	; peephole 7438
+	movx	a,@dptr
+	mov	r%5,a
+	movx	a,@dptr
+	mov	r%7,a
+}
+
+replace restart {
+	movx	a,@dptr
+	mov	r%6,a
+	movx	a,@dptr
+	mov	ar%4,r%6
+} by {
+	movx	a,@dptr
+	mov	r%6,a
+	mov	r%4,a
+	movx	a,@dptr
+}
+
+replace restart {
+	movx	a,@dptr
+	mov	r%4,a
+	movx	a,@dptr
+	mov	r%3,a
+	mov	ar%5,r%4
+} by {
+	; peephole 7465
+	movx	a,@dptr
+	mov	r%4,a
+	mov	r%5,a
+	movx	a,@dptr
+	mov	r%3,a
+}
+
+replace restart {
+	movx	a,@dptr
+	mov	r%5,a
+	movx	a,@dptr
+	mov	r%7,a
+	%1	ar%5,r%2
+} by {
+	movx	a,@dptr
+	%1	a,r%2
+	mov	r%5,a
+	movx	a,@dptr
+	mov	r%7,a
+} if same(%1 'anl' 'orl' 'xrl')
+
+replace restart {
+	mov	r%7,a
+	push	ar%7
+} by {
+	push	acc
+} if notUsed(%7)
+
+replace restart {
+	movx	a,@dptr
+	mov	r%3,a
+	movx	a,@dptr
+	mov	r%2,ar%3
+} by {
+	movx	a,@dptr
+	mov	r%3,a
+	mov	r%2,a
+	movx	a,@dptr
+}
+
+replace restart {
+	movx	a,@dptr
+	mov	r%7,a
+	movx	a,@dptr
+	mov	r%5,a
+	mov	r%6,ar%7
+} by {
+	movx	a,@dptr
+	mov	r%7,a
+	mov	r%6,a
+	movx	a,@dptr
+	mov	r%5,a
+}
+
+replace restart {
+	jnz	%1
+	mov	r%3,a
+	sjmp	%2
+%1:
+	mov	r%3,#0xff
+%2:
+} by {
+	; peephole 7541
+	add	a,#0xff
+	subb	a,acc
+	mov	r%3,a
+} if notUsed('C'), notUsed('a'), labelRefCount(%1 1), labelRefCount(%2 1), labelRefCountChange(%1 -1), labelRefCountChange(%2 -1)
+
+replace restart {
+	jnc	%1
+	mov	r%2,#0xff
+%1:
+} by {
+	; peephole 7562
+	subb	a,acc
+	orl	r%2,a
+} if notUsed('C'), notUsed('a'), labelRefCount(%1 1), labelRefCountChange(%1 -1)
+
+replace restart {
+	mov	r%7,%1
+	mov	r%4,%1
+	mov	a,r%7
+	%2	a,r%4
+} by {
+	; peephole 7553
+	mov	a,%1
+	orl	a,%1
+} if same(%2 'anl' 'orl' 'xrl'), notUsed(%4), notUsed(%7)
+
+replace restart {
+	movx	a,@%1
+	mov	r%2,a
+	inc	%1
+} by {
+	; peephole 7563
+	movx	a,@%1
+	inc	%1
+	mov	r%2,a
+} if operandsNotRelated(%1 %2)
+
+replace restart {
+	mov	r%6,dpl
+	mov	r%7,dph
+	movx	a,@dptr
+	mov	r%4,a
+	inc	r%6
+	cjne	r%6,#0x00,%1
+	inc	r%7
+%1:
+} by {
+	; peephole 7579
+	movx	a,@dptr
+	inc	dptr
+	mov	r%6,dpl
+	mov	r%7,dph
+	mov	r%4,a
+} if labelRefCount(%1 1), labelRefCountChange(%1 -1), operandsNotRelated(%4 %6 %7)
+
+replace restart {
+	mov	dpl,r%6
+	mov	dph,r%7
+	movx	a,@dptr
+	mov	r%4,a
+	inc	r%6
+	cjne	r%6,#0x00,%1
+	inc	r%7
+%1:
+} by {
+	; peephole 7599
+	mov	dpl,r%6
+	mov	dph,r%7
+	movx	a,@dptr
+	inc	dptr
+	mov	r%6,dpl
+	mov	r%7,dph
+	mov	r%4,a
+} if labelRefCount(%1 1), labelRefCountChange(%1 -1), operandsNotRelated(%4 %6 %7)
+
+replace restart {
+	mov	r%5,#%1
+	mov	r%6,#%2
+	mov	r%7,#%3
+	mov	r%8,#%4
+	mov	dpl,r%5
+	mov	dph,r%6
+	mov	b,r%7
+	mov	a,r%8
+} by {
+	mov	r%5,#%1
+	mov	r%6,#%2
+	mov	r%7,#%3
+	mov	r%8,#%4
+	mov	dpl,#%1
+	mov	dph,#%2
+	mov	b,#%3
+	mov	a,#%4
+}
+
+replace restart {
+	jnc	%1
+	mov	r%2,#0x00
+	sjmp	%3
+%1:
+	mov	r%2,#0xff
+%3:
+} by {
+	; peephole 7655
+	subb	a,acc
+	cpl	a
+	mov	r%2,a
+} if notUsed('C'), notUsed('a'), labelRefCount(%1 1), labelRefCount(%3 1), labelRefCountChange(%1 -1), labelRefCountChange(%3 -1)
+
+
+replace restart {
+	jnc	%1
+	mov	r%2,#0xff
+	sjmp	%3
+%1:
+	mov	r%2,#0x00
+%3:
+} by {
+	; peephole 7670
+	subb	a,acc
+	mov	r%2,a
+} if notUsed('C'), notUsed('a'), labelRefCount(%1 1), labelRefCount(%3 1), labelRefCountChange(%1 -1), labelRefCountChange(%3 -1)
+
+// avoid conditional execution at the same code size
+replace restart {
+	jz	%1
+	mov	a,#0xff
+%1:
+} by {
+	; peephole 7681
+	add	a,#0xff
+	subb	a,acc
+} if notUsed('C'), labelRefCount(%1 1), labelRefCountChange(%1 -1)
+
+replace restart {
+	clr	a
+	rlc	a
+	mov	r%1,a
+	mov	c,%2
+	clr	a
+	rlc	a
+	%3	a,r%1
+} by {
+	; peephole 7695
+	%3	c,%2
+	clr	a
+	rlc	a
+} if same(%3 'anl' 'orl'), notUsed('C'), notUsed(%1)
+
+// a == 0xff -> c
+replace restart {
+	xrl	a,#0xff
+	add	a,#0xff
+	cpl	c
+} by {
+	; peephole 7707
+	add	a,#0x01
+} if notUsed('a')
+
+replace restart {
+	xrl	a,#0xff
+	add	a,#0xff
+} by {
+	; peephole 7731
+	add	a,#0x01
+	cpl	c
+} if notUsed('a')
+
+// and/or C bit with another variable
+replace restart {
+	clr	a
+	rlc	a
+	%1	a,%2
+	add	a,#0xff
+} by {
+	; peephole 7744
+	mov	a,%2
+	%1	c,acc.0
+} if notUsed('a'), same(%1 'anl' 'orl')
 
 // 147: Fix compiler output to comply with 8051 instruction set.
 replace {
