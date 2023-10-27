@@ -889,7 +889,8 @@ asmLineNodeFromLineNode (lineNode *ln)
         bitVectUnSetBit (aln->regsRead, A_IDX);
     }
 
-  if (!strcmp (inst, "lcall") || !strcmp (inst, "ljmp") || !strcmp (inst, "acall"))
+  if (!strcmp (inst, "lcall") || !strcmp (inst, "ljmp")
+      || !strcmp (inst, "acall") || !strcmp (inst, "ajmp"))
     {
       /* Handle special library calls which do not go through the
          regular function call expansion.  */

@@ -718,12 +718,19 @@ doTermScan (lineNode **pl, const char *pReg)
     }
 }
 
+// #define dbglog_deadmove(...) do { __VA_ARGS__; } while (0)
+#ifndef dbglog_deadmove
+  #define dbglog_deadmove(...) do { } while (0)
+#endif
+
 /*-----------------------------------------------------------------*/
 /* removeDeadPopPush - remove pop/push pair if possible            */
 /*-----------------------------------------------------------------*/
 static bool
 removeDeadPopPush (const char *pReg, lineNode *currPl, lineNode *head)
 {
+  dbglog_deadmove (printf ("removeDeadPushPop  reg: %s  line: %s\n", pReg, currPl->line));
+
   lineNode *pushPl, *pl;
 
   /* A pop/push pair can be removed, if these criteria are met
@@ -799,6 +806,8 @@ removeDeadPopPush (const char *pReg, lineNode *currPl, lineNode *head)
 static bool
 removeDeadPushPop (const char *pReg, lineNode *currPl, lineNode *head)
 {
+  dbglog_deadmove (printf ("removeDeadPushPop  reg: %s  line: %s\n", pReg, currPl->line));
+
   lineNode *popPl;
 
   /* A push/pop pair can be removed, if these criteria are met
@@ -853,11 +862,6 @@ removeDeadPushPop (const char *pReg, lineNode *currPl, lineNode *head)
 /*-----------------------------------------------------------------*/
 /* removeDeadMove - remove superflous 'mov r%1,%2'                 */
 /*-----------------------------------------------------------------*/
-
-//#define dbglog_deadmove(...) do { __VA_ARGS__; } while (0)
-#ifndef dbglog_deadmove
-  #define dbglog_deadmove(...) do { } while (0)
-#endif
 
 static bool
 removeDeadMove (const char *pReg, lineNode *currPl)
