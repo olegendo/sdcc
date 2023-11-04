@@ -6151,11 +6151,17 @@ replace restart {
 	; peephole 304.1
 } if same(%1 'a' 'dpl' 'dph' 'b' 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), notUsed(%1)
 
-replace {
+replace restart {
 	clr	a
 } by {
 	; Peephole 304.1  clr a removed
 } if notUsed('a')
+
+replace restart {
+	cpl	%1
+} by {
+	; Peephole 304.2  cpl %1 removed
+} if same(%1 'a' 'c' 'b0' 'b1' 'b2' 'b3' 'b4' 'b5' 'b6' 'b7'), notUsed(%1)
 
 replace restart {
 	mov	a,%1
