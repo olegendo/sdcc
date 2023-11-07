@@ -8163,6 +8163,17 @@ replace restart {
 	mov	c,%1
 } if same(%2 'anl' 'orl'), notVolatile(%1)
 
+// happens when writing the return value of a function to a __xdata variable
+replace restart {
+	mov	%1,dpl
+	mov	dptr,%2
+	mov	a,%1
+} by {
+	; peephole 8172
+	mov	a,dpl
+	mov	dptr,%2
+} if notUsed(%1), notVolatile(%1), operandsNotRelated('a' %1 %2)
+
 
 // 147: Fix compiler output to comply with 8051 instruction set.
 replace {
