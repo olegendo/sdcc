@@ -7257,6 +7257,21 @@ replace restart {
 %4:
 } if notSame(%1 '@r0' '@r1'), notUsed(%1), labelRefCount(%3 1), labelRefCountChange(%3 -1), labelRefCountChange(%4 -1)
 
+// x == 0xFF -> a
+// replace with branchless alternative
+replace restart {
+	clr	a
+	cjne	%1,#0xff,%2
+	inc	a
+%2:
+} by {
+	; Peephole 7268
+	mov	a,%1
+	add	a,#0x01
+	clr	a
+	rlc	a
+} if notSame(%1 'a'), notUsed('C'), labelRefCount(%2 1), labelRefCountChange(%2 -1)
+
 replace restart {
 	anl	a%1,#%4
 	mov	a%2,%3
