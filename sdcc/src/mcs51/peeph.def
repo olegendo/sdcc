@@ -1026,7 +1026,7 @@ replace {
 } by {
 	; Peephole 1029
 	xrl	a,#0x04
-	anl	a,#0xfb
+	anl	a,#0x04
 } if notUsed('C')
 
 replace {
@@ -1039,7 +1039,7 @@ replace {
 } by {
 	; Peephole 1028
 	xrl	a,#0x08
-	anl	a,#0xf7
+	anl	a,#0x08
 } if notUsed('C')
 
 replace {
@@ -1051,7 +1051,7 @@ replace {
 } by {
 	; Peephole 1055
 	xrl	a,#0x10
-	anl	a,#0xef
+	anl	a,#0x10
 } if notUsed('C')
 
 replace {
@@ -1064,7 +1064,7 @@ replace {
 } by {
 	; Peephole 1067
 	xrl	a,#0x20
-	anl	a,#0xdf
+	anl	a,#0x20
 } if notUsed('C')
 
 replace {
@@ -1076,7 +1076,7 @@ replace {
 } by {
 	; Peephole 1079
 	xrl	a,#0x40
-	anl	a,#0xbf
+	anl	a,#0x40
 } if notUsed('C')
 
 replace {
@@ -1087,7 +1087,7 @@ replace {
 } by {
 	; Peephole 1090
 	xrl	a,#0x80
-	anl	a,#0x7f
+	anl	a,#0x80
 } if notUsed('C')
 
 
@@ -8154,6 +8154,7 @@ replace restart {
 	clr	a
 	movc	a,@a+dptr
 } by {
+	; peephole 8255
 	mov	r%1,#0x00
 	mov	dptr,#%2
 	movc	a,@a+dptr
@@ -8165,6 +8166,7 @@ replace restart {
 	mov	r%1,a
 	mov	%2,r%1
 } by {
+	; peephole 8287
 	mov	r%1,a
 	mov	%2,a
 }
@@ -8173,35 +8175,35 @@ replace restart {
 replace restart {
 	mov	ar%1,%2
 } by {
-	;	Peephole 303	mov ar%1,%2 removed
+	;	Peephole 303/8296	mov ar%1,%2 removed
 } if notVolatile(%2), deadMove(%1)
 
 // FIXME: this is repeated and shouldn't be needed. but it does catch addtional cases
 replace restart {
 	mov	%1,%2
 } by {
-	;	Peephole 304	mov %1,%2 removed
+	;	Peephole 304/8303	mov %1,%2 removed
 } if notVolatile(%2), same(%1 'a' 'dpl' 'dph' 'b' 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), notUsed(%1)
 
 // FIXME: this is repeated and shouldn't be needed. but it does catch addtional cases
 replace restart {
 	mov	%1,#%2
 } by {
-	; peephole 304.1
+	; peephole 304.1/8310
 } if same(%1 'a' 'dpl' 'dph' 'b' 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), notUsed(%1)
 
 // FIXME: this is repeated and shouldn't be needed. but it does catch addtional cases
 replace restart {
 	clr	a
 } by {
-	; Peephole 304.1  clr a removed
+	; Peephole 304.1/8317  clr a removed
 } if notUsed('a')
 
 replace restart {
 	mov	%1,a
 	%2	a,%1
 } by {
-	; peephole 304.2   %2 with itself removed
+	; peephole 304.2/8324   %2 with itself removed
 	mov	%1,a
 } if same(%2 'anl' 'orl')
 
@@ -8209,7 +8211,7 @@ replace restart {
 	mov	c,%1
 	%2	c,%1
 } by {
-	; peephole 8152
+	; peephole 8152/8332
 	mov	c,%1
 } if same(%2 'anl' 'orl'), notVolatile(%1)
 
@@ -8219,7 +8221,7 @@ replace restart {
 	mov	dptr,%2
 	mov	a,%1
 } by {
-	; peephole 8172
+	; peephole 8172/8342
 	mov	a,dpl
 	mov	dptr,%2
 } if notUsed(%1), notVolatile(%1), operandsNotRelated('a' %1 %2)
