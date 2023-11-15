@@ -2614,7 +2614,7 @@ replace restart {
 }
 
 // char indexed access to: char code table[] = {4,3,2,1};
-replace {
+replace restart {
 	add	a,#%1
 	mov	dpl,a
 	clr	a
@@ -2629,7 +2629,7 @@ replace {
 }
 
 // char indexed access to: int code table[] = {4,3,2,1};
-replace {
+replace restart {
 	mov	b,#0x02
 	mul	ab
 	add	a,#%2
@@ -2643,18 +2643,45 @@ replace {
 	mov	a,#0x01
 	movc	a,@a+dptr
 } by {
-	;	Peephole 186.e	optimized movc sequence (b, dptr differ)
+	;	Peephole 186.e	optimized movc sequence
 	add	a,acc
-	mov	b,a
-	mov	dptr,#%2
-	jnc	.+4
-	inc	dph
+	mov	dpl,a
+	clr	a
+	addc	a,#(%2 >> 8)
+	mov	dph,a
+	mov	a,#%2
 	movc	a,@a+dptr
 	mov	%3,a
-	mov	a,b
+	mov	a,#%2
 	inc	dptr
 	movc	a,@a+dptr
 } if notUsed('dph'), notUsed('dpl'), notUsed('b')
+
+replace restart {
+	mov	r%1,#0x00
+	add	a,#%2
+	mov	dpl,a
+	mov	a,r%1
+	addc	a,#(%2 >> 8)
+	mov	dph,a
+	clr	a
+	movc	a,@a+dptr
+} by {
+	; peephole 8255
+	mov	r%1,#0x00
+	mov	dptr,#%2
+	movc	a,@a+dptr
+} if notUsed('C')
+
+replace restart {
+	inc	dptr
+	clr	a
+	movc	a,@a+dptr
+} by {
+	; peephole 8266
+	mov	a,#0x01
+	movc	a,@a+dptr
+} if notUsed('dph'), notUsed('dpl')
 
 replace {
 	mov	r%1,%2
@@ -8143,32 +8170,6 @@ replace start {
 	%4	%1
 } if operandsNotRelated('a' %1 %3 'sp' '@r0' '@r1'), notVolatile(%3), same(%4 'inc' 'dec' 'clr')
 
-// optimize movc
-replace restart {
-	mov	r%1,#0x00
-	add	a,#%2
-	mov	dpl,a
-	mov	a,r%1
-	addc	a,#(%2 >> 8)
-	mov	dph,a
-	clr	a
-	movc	a,@a+dptr
-} by {
-	; peephole 8255
-	mov	r%1,#0x00
-	mov	dptr,#%2
-	movc	a,@a+dptr
-} if notUsed('C')
-
-replace restart {
-	inc	dptr
-	clr	a
-	movc	a,@a+dptr
-} by {
-	; peephole 8266
-	mov	a,#0x01
-	movc	a,@a+dptr
-} if notUsed('dph'), notUsed('dpl')
 
 // FIXME: this is repeated and shouldn't be needed. but it does catch addtional cases
 replace restart {
