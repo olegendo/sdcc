@@ -1,9 +1,9 @@
 // FIXME: this can be emitted by immdInRange
 //        canonicalize 0xn -> 0x0n for other patterns
 replace {
-	%2	a,#0x%1
+	%2	%3,#0x%1
 } by {
-	%2	a,#0x0%1
+	%2	%3,#0x0%1
 } if same(%1 '0' '1' '2' '3' '4' '5' '6' '7' '8' '9' 'a' 'b' 'c' 'd' 'e' 'f')
 
 
@@ -6236,7 +6236,7 @@ replace restart {
 	; Peephole 304.3	removed dead computation  %4  a,%1
 } if same(%4 'add' 'addc' 'subb'), notUsed('a'), notUsed('C'), notVolatile(%1)
 
-replace {
+replace restart {
 	%4	a
 } by {
 	; Peephole 304.4	removed dead computation   %4  a
@@ -8150,6 +8150,62 @@ replace restart {
 	%4	c,acc.%6
 } if same(%4 'anl' 'orl'), immdInRange(0 7 '+' %5 1 %6), notUsed('a')
 
+replace restart {
+	clr	a
+	mov	r%1,#0x00
+	mov	r%2,#0x00
+	mov	r%3,#0x00
+	mov	r%4,#0x00
+} by {
+	clr	a
+	mov	r%1,a
+	mov	r%2,a
+	mov	r%3,a
+	mov	r%4,a
+}
+
+replace restart {
+	clr	a
+	mov	r%1,#0x00
+	mov	r%2,#0x00
+	mov	r%3,#0x00
+} by {
+	clr	a
+	mov	r%1,a
+	mov	r%2,a
+	mov	r%3,a
+}
+
+replace restart {
+	clr	a
+	mov	r%1,#0x00
+	mov	r%2,#0x00
+} by {
+	clr	a
+	mov	r%1,a
+	mov	r%2,a
+}
+
+replace restart {
+	clr	a
+	mov	r%1,#0x00
+} by {
+	clr	a
+	mov	r%1,a
+}
+
+replace restart {
+	clr	a
+	%5	%1,%2
+	mov	r%3,#0x00
+} by {
+	clr	a
+	%5	%1,%2
+	mov	r%3,a
+} if operandsNotRelated('a' %1 %2 %3)
+
+
+
 // hoist loads of 'a' in the hope that it eliminate a reg-reg move.
 replace start {
 	%4	%1,%2
@@ -8158,7 +8214,7 @@ replace start {
 	; peephole 8131
 	mov	a,%3
 	%4	%1,%2
-} if operandsNotRelated('a' %1 %2 %3 'sp' '@r0' '@r1'), notVolatile(%3)
+} if operandsNotRelated('a' %1 %2 %3 'sp' '@r0' '@r1'), notVolatile(%3), operandsNotRelated(%4 'call' 'jmp' 'cjne' 'djnz' 'jc' 'jnc' 'jb' 'jnb' 'jbc' 'jz' 'jnz' 'ret')
 
 // hoist loads of 'a' in the hope that it eliminate a reg-reg move.
 replace start {
@@ -8169,6 +8225,57 @@ replace start {
 	mov	a,%3
 	%4	%1
 } if operandsNotRelated('a' %1 %3 'sp' '@r0' '@r1'), notVolatile(%3), same(%4 'inc' 'dec' 'clr')
+
+// sink constant loads in the hope that they will combine with the operation
+// that uses them.  it oscillates with pattern 8131 and creates an infinite loop.
+//replace restart {
+//	mov	r%1,#%2
+//	%3	%4,%5
+//} by {
+//	; peephole 8152
+//	%3	%4,%5
+//	mov	r%1,#%2
+//} if operandsNotRelated(%1 %4 %5)
+
+// hoist computations of 'a' in the hope that it will combine better with
+// previous loads of 'a' or computation results
+replace {
+	%1	%2,%3
+	%4	a
+} by {
+	; peephole 8219
+	%4	a
+	%1	%2,%3
+} if operandsNotRelated('a' %2 %3 'sp' '@r0' '@r1' 'c'), operandsNotRelated(%1 'mov' 'call' 'jmp' 'cjne' 'djnz' 'jc' 'jnc' 'jb' 'jnb' 'jbc' 'jz' 'jnz' 'ret')
+
+replace {
+	mov	%2,%3
+	%4	a,%5
+} by {
+	; peephole 8228
+	%4	a,%5
+	mov	%2,%3
+} if notSame(%4 'mov' 'movx'), operandsNotRelated('a' %2 %3 'sp' '@r0' '@r1' 'c' %5), notVolatile(%5)
+
+replace {
+	mov	%2,%3
+	%6	%1,#%5
+} by {
+	; peephole 8237
+	%6	%1,#%5
+	mov	%2,%3
+} if notSame(%6 'mov' 'movx'), same(%1 'ar0' 'ar1' 'ar2' 'ar3' 'ar4' 'ar5' 'ar6' 'ar7'), operandsNotRelated(%1 %2 %3 'sp' '@r0' '@r1' 'c')
+
+
+replace restart {
+	mov	r%1,a
+	add	a,r%1
+	mov	r%1,a
+} by {
+	; peephole 8276
+	add	a,acc
+	mov	r%1,a
+}
 
 
 // FIXME: this is repeated and shouldn't be needed. but it does catch addtional cases
@@ -8235,6 +8342,140 @@ replace restart {
 	mov	a,dpl
 	mov	dptr,%2
 } if notUsed(%1), notVolatile(%1), operandsNotRelated('a' %1 %2)
+
+
+replace restart {
+	rlc	a
+	rrc	a
+} by {
+	; peephole 8352
+}
+
+replace restart {
+	rrc	a
+	rlc	a
+} by {
+	; peephole 8359
+}
+
+replace restart {
+	mov	a,#%1
+	add	a,#%2
+} by {
+	; peephole 8366
+	clr	c
+	mov	a,#%3
+} if operandsLiteral(%1 %2), immdInRange(0 255 '+' %1 %2 %x3)
+
+
+replace restart {
+	mov	a,#%1
+	add	a,#%2
+} by {
+	; peephole 8376
+	setb	c
+	mov	a,#%4
+} if operandsLiteral(%1 %2), immdInRange(256 511 '+' %1 %2 %3), immdInRange(0 255 '&' %3 255 %x4)
+
+replace restart {
+	mov	a,#%1
+	mov	r%2,a
+} by {
+	; peephole 8385
+	mov	r%2,#%1
+} if notUsed('a')
+
+replace restart {
+	setb	c
+	mov	a,#%1
+	addc	a,#%2
+} by {
+	; peephole 8394
+	clr	c
+	mov	a,#%4
+} if operandsLiteral(%1 %2), immdInRange(0 255 '+' %1 %2 %3), immdInRange(0 255 '+' %3 1 %x4)
+
+replace restart {
+	setb	c
+	mov	a,#%1
+	addc	a,#%2
+} by {
+	; peephole 8404
+	setb	c
+	mov	a,#%5
+} if operandsLiteral(%1 %2), immdInRange(0 511 '+' %1 %2 %3), immdInRange(256 511 '+' %3 1 %4), immdInRange(0 255 '&' %4 255 %x5)
+
+replace restart {
+	mov	a,#%1
+	anl	a,#%2
+} by {
+	; peephole 8413
+	mov	a,#%3
+} if operandsLiteral(%1 %2), immdInRange(0 255 '&' %1 %2 %x3)
+
+replace restart {
+	mov	ar%1,r%2
+	%3	a,r%1
+} by {
+	; peephole 8421
+	mov	ar%1,r%2
+	%3	a,r%2
+} if same(%3 'add' 'addc' 'subb' 'anl' 'orl' 'xrl')
+
+replace restart {
+	clr	a
+	%1	%2,%3
+	orl	ar%4,a
+} by {
+	; peephole 8431
+	clr	a
+	%1	%2,%3
+} if operandsNotRelated('a' %2 %3)
+
+replace restart {
+	clr	a
+	rlc	a
+	anl	a,#0x01
+} by {
+	; peephole 8441
+	clr	a
+	rlc	a
+}
+
+replace {
+	clr	a
+	orl	ar%1,a
+} by {
+	; peephole 8462
+	clr	a
+}
+
+replace {
+	clr	a
+} by {
+	; peephole 8496
+} if notUsed('a')
+
+
+// hoist store of 'a' into register after computation
+// ??? this seems to be prone to cause inifinite loops with some other patterns...
+replace restart {
+	mov	%2,%3
+	mov	%1,a
+} by {
+	; peephole 8228
+	mov	%1,a
+	mov	%2,%3
+} if same(%1 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), operandsNotRelated('a' %1 %2 %3 'sp' '@r0' '@r1')
+
+replace restart {
+	%5	c
+	mov	%1,a
+} by {
+	; peephole 8228
+	mov	%1,a
+	%5	c
+} if same(%5 'clr' 'setb')
 
 
 // 147: Fix compiler output to comply with 8051 instruction set.
