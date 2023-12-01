@@ -8477,6 +8477,22 @@ replace restart {
 	%5	c
 } if same(%5 'clr' 'setb')
 
+replace restart {
+	%1	%2,%3
+%3:
+} by {
+	; peephole 8483
+%3:
+} if same(%1 'jnb' 'jb'), labelRefCountChange(%3 -1)
+
+replace restart {
+	%1	%2
+%2:
+} by {
+	; peephole 8492
+%2:
+} if same(%1 'jc' 'jnc' 'jz' 'jnz'), labelRefCountChange(%2 -1)
+
 
 // 147: Fix compiler output to comply with 8051 instruction set.
 replace {
