@@ -4976,6 +4976,16 @@ replace {
 	djnz	%1,%2
 } if notVolatile(%1), operandsNotRelated(%1 '@r0' '@r1')
 
+replace restart {
+	dec	%1
+	clr	a
+	cjne	a,%1,%2
+} by {
+	; peephole 4971
+	clr	a
+	djnz	%1,%2
+} if notUsed('C'), notSame(%1 'a'), notSame(%1 'acc')
+
 
 // applies to f.e. funptrs.c
 // saves one byte if %1 is a register or @register
