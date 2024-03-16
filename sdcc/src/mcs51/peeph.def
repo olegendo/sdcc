@@ -1561,13 +1561,26 @@ replace {
 	mov	r%1,a
 } if notUsed('a'), notUsed('C')
 
+; This pattern can produce wrong code if one of the immediates
+; is part of an symbol address.  In that case we don't know if
+; there's going to be a carry-out or not.
 replace {
 	add	a,#%1
 	add	a,#%2
 } by {
-	; Peephole 1236
-	add	a,#(%1 + %2)
-}
+	; Peephole 1236.1
+	add	a,#%3
+} if operandsLiteral(%1 %2), immdInRange(0 255 '+' %1 %2 %3)
+
+replace {
+	add	a,#%1
+	add	a,#%2
+} by {
+	; Peephole 1236.2
+	add	a,#%4
+	setb	c
+} if operandsLiteral(%1 %2), immdInRange(256 511 '+' %1 %2 %3), immdInRange(0 255 '&' %3 255 %4)
+
 
 // these type of patterns happen a lot when accessing stack variables
 replace {
