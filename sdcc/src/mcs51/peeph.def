@@ -7766,6 +7766,19 @@ replace restart {
 	rlc	a
 	mov	r%2,a
 } if same(%4 'anl' 'orl'), notUsed('C'), notUsed('a')
+
+// and / or a negated bit
+replace restart {
+	cpl	%1
+	mov	c,%2
+	%3	c,%1
+} by {
+	; peephole 7758
+	mov	c,%2
+	%3	c,/%1
+} if same(%3 'anl' 'orl'), notUsed(%1)
+
+
 replace restart {
 	jnc	%1
 	mov	r%2,#0xff
