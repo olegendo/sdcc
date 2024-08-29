@@ -7322,6 +7322,25 @@ replace restart {
 	rlc	a
 } if notSame(%1 'a'), notUsed('C'), labelRefCount(%2 1), labelRefCountChange(%2 -1)
 
+// x == 0x00 -> a
+// replace with shorter branchless alternative
+replace restart {
+	clr	a
+	cjne	a,%1,%2
+	mov	a,#0x01
+	sjmp	%3
+%2:
+	clr	a
+%3:
+} by {
+	; peephole 7336
+	mov	a,%1
+	add	a,#0xff
+	cpl	c
+	clr	a
+	rlc	a
+} if notSame(%1 'a'), notUsed('C'), labelRefCount(%2 1), labelRefCount(%3 1), labelRefCountChange(%2 -1), labelRefCountChange(%3 -1)
+
 replace restart {
 	anl	a%1,#%4
 	mov	a%2,%3
@@ -7384,6 +7403,14 @@ replace restart {
 	%4	a,@%2
 	mov	%1,a
 } if same(%4 'anl' 'orl' 'xrl'), notUsed('a')
+
+replace restart {
+	mov	%1,a
+	mov	a,%2
+	%3	a,%1
+} by {
+	%3	a,%2
+} if same(%3 'anl' 'orl' 'xrl'), same(%1 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), notUsed(%1), operandsNotRelated(%1 %2)
 
 replace restart {
 	dec	%1
@@ -7642,6 +7669,103 @@ replace restart {
 	mov	r%3,a
 } if notUsed('C'), notUsed('a'), labelRefCount(%1 1), labelRefCount(%2 1), labelRefCountChange(%1 -1), labelRefCountChange(%2 -1)
 
+// a == 0 ? 0xff : 0x00
+replace restart {
+	jz	%1
+	mov	r%3,#0x00
+	sjmp	%2
+%1:
+	mov	r%3,#0xff
+%2:
+} by {
+	; peephole 7680
+	add	a,#0xff
+	cpl	c
+	subb	a,acc
+	mov	r%3,a
+} if notUsed('C'), notUsed('a'), labelRefCount(%1 1), labelRefCount(%2 1), labelRefCountChange(%1 -1), labelRefCountChange(%2 -1)
+
+// a != 0 ? 0x00 : 0xff
+replace restart {
+	jnz	%1
+	mov	r%3,#0xff
+	sjmp	%2
+%1:
+	mov	r%3,#0x00
+%2:
+} by {
+	; peephole 7695
+	add	a,#0xff
+	cpl	c
+	subb	a,acc
+	mov	r%3,a
+} if notUsed('C'), notUsed('a'), labelRefCount(%1 1), labelRefCount(%2 1), labelRefCountChange(%1 -1), labelRefCountChange(%2 -1)
+
+// c ? 0x00 : 0xff
+replace restart {
+	jc	%1
+	mov	r%3,#0xff
+	sjmp	%2
+%1:
+	mov	r%3,#0x00
+%2:
+} by {
+	; peephole 7710
+	cpl	c
+	subb	a,acc
+	mov	r%3,a
+} if notUsed('C'), notUsed('a'), labelRefCount(%1 1), labelRefCount(%2 1), labelRefCountChange(%1 -1), labelRefCountChange(%2 -1)
+
+// bit == 0 ? 0xff : 0x00
+replace restart {
+	jnb	%4,%1
+	mov	r%3,#0x00
+	sjmp	%2
+%1:
+	mov	r%3,#0xff
+%2:
+} by {
+	; peephole 7725
+	mov	c,%4
+	subb	a,acc
+	cpl	a
+	mov	r%3,a
+} if notUsed('C'), notUsed('a'), labelRefCount(%1 1), labelRefCount(%2 1), labelRefCountChange(%1 -1), labelRefCountChange(%2 -1)
+
+// bit == 0 ? 0x00 : 0xff
+replace restart {
+	jnb	%4,%1
+	mov	r%3,#0xff
+	sjmp	%2
+%1:
+	mov	r%3,#0x00
+%2:
+} by {
+	; peephole 7725
+	mov	c,%4
+	subb	a,acc
+	mov	r%3,a
+} if notUsed('C'), notUsed('a'), labelRefCount(%1 1), labelRefCount(%2 1), labelRefCountChange(%1 -1), labelRefCountChange(%2 -1)
+
+
+// and / or two bits
+replace restart {
+	mov	c,%1
+	clr	a
+	rlc	a
+	mov	r%2,a
+	mov	c,%3
+	clr	a
+	rlc	a
+	%4	ar%2,a
+} by {
+	; peephole 7726
+	mov	c,%1
+	%4	c,%3
+	clr	a
+	rlc	a
+	mov	r%2,a
+} if same(%4 'anl' 'orl'), notUsed('C'), notUsed('a')
 replace restart {
 	jnc	%1
 	mov	r%2,#0xff
@@ -7660,7 +7784,7 @@ replace restart {
 } by {
 	; peephole 7553
 	mov	a,%1
-	orl	a,%1
+	%2	a,%1
 } if same(%2 'anl' 'orl' 'xrl'), notUsed(%4), notUsed(%7)
 
 replace restart {
@@ -7673,6 +7797,17 @@ replace restart {
 	inc	%1
 	mov	r%2,a
 } if operandsNotRelated(%1 %2)
+
+replace restart {
+	mov	%1,a
+	movx	a,%2
+	mov	%3,%1
+} by {
+	; peephole 7790
+	mov	%1,a
+	mov	%3,a
+	movx	a,%2
+} if same(%1 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), operandsNotRelated('a' %1 %2 %3)
 
 replace restart {
 	mov	r%6,dpl
@@ -8230,6 +8365,8 @@ replace restart {
 
 
 // hoist loads of 'a' in the hope that it eliminate a reg-reg move.
+// FIXME: should also do that with arbitrary registers, but the peephole processing
+//        will loop.  need to do as a special pass
 replace start {
 	%4	%1,%2
 	mov	a,%3
