@@ -4917,6 +4917,21 @@ replace {
 %2:
 } if labelRefCount %2 1
 
+// while (!bit) { }; bit = 1;
+// don't use jbc + sjmp as this will always have 1 jump in either path.
+// use only jnb, as it will have no jump in the case when the bit is already set.
+replace {
+%1:
+	jbc	%2,%3
+	sjmp	%1
+%3:
+} by {
+%1:
+	jnb	%2,%1
+	clr	%2
+%3:
+} if labelRefCountChange(%3 -1)
+
 
 // not before peephole 250.b
 replace {
