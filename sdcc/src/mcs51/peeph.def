@@ -1408,13 +1408,6 @@ replace {
 } if notUsed('a')
 
 replace {
-	addc	a,%1
-	mov	c,acc.0
-} by {
-	; Peephole 135_5   removed unneeded addc
-} if notUsed('a')
-
-replace {
 	mov	r%1,%2
 	mov	a,#%3
 	%4	a,r%1
@@ -7876,6 +7869,110 @@ replace restart {
 } if labelRefCount(%1 1), labelRefCountChange(%1 -1), operandsNotRelated(%4 %6 %7)
 
 replace restart {
+	mov	r%1,a
+	mov	dpl,r%2
+	mov	dph,a
+	movx	a,@dptr
+	mov	r%3,a
+	inc	r%2
+	cjne	r%2,#0x00,%4
+	inc	r%1
+%4:
+} by {
+	; peephole 7889
+	mov	dpl,r%2
+	mov	dph,a
+	movx	a,@dptr
+	inc	dptr
+	mov	r%3,a
+	mov	r%2,dpl
+	mov	r%1,dph
+} if labelRefCount(%4 1), labelRefCountChange(%4 -1), operandsNotRelated(%1 %2 %3), notUsed('dpl'), notUsed('dph'), notUsed('C')
+
+replace restart {
+	mov	dpl,r%6
+	mov	dph,r%7
+	movx	a,@dptr
+	mov	r%5,a
+	mov	a,r%6
+	add	a,#0x01
+	mov	r%3,a
+	clr	a
+	addc	a,r%7
+} by {
+	; peephole 7910
+	mov	dpl,r%6
+	mov	dph,r%7
+	movx	a,@dptr
+	inc	dptr
+	mov	r%5,a
+	mov	r%3,dpl
+	mov	a,dph
+} if operandsNotRelated(%3 %5 %6 %7), notUsed('dpl'), notUsed('dph'), notUsed('C')
+
+replace restart {
+	mov	dpl,r%3
+	mov	dph,r%4
+	movx	a,@dptr
+	inc	dptr
+	mov	r%2,a
+	movx	a,@dptr
+	mov	r%5,a
+	mov	a,r%3
+	add	a,#0x02
+	mov	r%3,a
+	clr	a
+	addc	a,r%4
+} by {
+	; peephole 7934
+	mov	dpl,r%3
+	mov	dph,r%4
+	movx	a,@dptr
+	inc	dptr
+	mov	r%2,a
+	movx	a,@dptr
+	inc	dptr
+	mov	r%5,a
+	mov	r%3,dpl
+	mov	a,dph
+} if operandsNotRelated(%2 %3 %4 %5), notUsed('dpl'), notUsed('dph'), notUsed('C')
+
+replace restart {
+	mov	a,dph
+	mov	r%4,a
+	mov	r%3,dpl
+	inc	r%3
+	cjne	r%3,#0x00,%9
+	inc	r%4
+%9:
+} by {
+	; peephole 7956
+	mov	a,dph
+	inc	dptr
+	mov	r%3,dpl
+	mov	r%4,dph
+} if labelRefCount(%9 1), labelRefCountChange(%9 -1), operandsNotRelated(%3 %4), notUsed('dpl'), notUsed('dph'), notUsed('C')
+
+replace restart {
+	mov	dpl,r%5
+	mov	dph,r%4
+	movx	@dptr,a
+	inc	r%5
+	cjne	r%5,#0x00,%9
+	inc	r%4
+%9:
+} by {
+	; peephole 7972
+	mov	dpl,r%5
+	mov	dph,r%4
+	movx	@dptr,a
+	inc	dptr
+	mov	r%5,dpl
+	mov	r%4,dph
+} if labelRefCount(%9 1), labelRefCountChange(%9 -1), operandsNotRelated(%4 %5), notUsed('dpl'), notUsed('dph'), notUsed('C')
+
+
+replace restart {
 	mov	r%5,#%1
 	mov	r%6,#%2
 	mov	r%7,#%3
@@ -7893,6 +7990,58 @@ replace restart {
 	mov	dph,#%2
 	mov	b,#%3
 	mov	a,#%4
+}
+
+// returning a 16-bit value through '(DPH << 8) | DPL' (from inline asm)
+// split up into several patterns to increase usefulness in other cases
+// (does a step-by-step code transform)
+replace restart {
+	mov	r%6,#0x00
+	mov	a,%1
+	mov	r%5,#0x00
+	orl	ar%6,a
+} by {
+	; peephole 8010
+	mov	r%5,#0x00
+	mov	a,%1
+	mov	r%6,a
+} if operandsNotRelated(%1 %5 %6)
+
+replace restart {
+	mov	r%5,#0x00
+	mov	a,%1
+	mov	r%6,a
+	mov	a,r%5
+} by {
+	; peephole 8022
+	mov	r%5,#0x00
+	mov	a,%1
+	mov	r%6,a
+	clr	a
+} if operandsNotRelated(%1 %5 %6)
+
+replace restart {
+	mov	r%7,_DPH
+	mov	a,_DPL
+	mov	dpl,a
+	mov	dph,r%7
+} by {
+	; peephole 8035
+	mov	r%7,dph
+	mov	a,dpl
+}
+
+// "return DPL" etc
+replace restart {
+	mov	dpl,_DPL
+} by {
+	; peephole 8045
+}
+
+replace restart {
+	mov	dph,_DPH
+} by {
+	; peephole 8051
 }
 
 replace restart {
