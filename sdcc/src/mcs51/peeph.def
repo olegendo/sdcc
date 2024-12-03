@@ -823,9 +823,20 @@ replace {
 } by {
 	;	Peephole 132.a	optimized genCmpGt by inverse logic (acc differs)
 	mov	a,%2
-	add	a,#0xff - %1
+	add	a,#%4
 	mov	%3,c
-} if operandsLiteral(%1)
+} if operandsLiteral(%1), immdInRange(0 255 '-' 255 %1 %x4), notUsed('a')
+
+replace {
+	mov	r%3,a
+	mov	a,#%1
+	clr	c
+	subb	a,r%3
+} by {
+	; peephole 836
+	mov	r%3,a
+	add	a,#%4
+} if operandsLiteral(%1), immdInRange(0 255 '-' 255 %1 %x4), notUsed('a')
 
 replace {
 	addc	a,%1
@@ -1217,6 +1228,16 @@ replace {
 } if notUsed('a')
 
 replace {
+	anl	a,#0x01
+	rr	a
+	anl	a,#0x80
+} by {
+	; peephole 1239
+	anl	a,#0x01
+	rr	a
+}
+
+replace {
 	add	a,#0x01
 } by {
 	; Peephole 928
@@ -1324,6 +1345,22 @@ replace {
 	mov	r%1,a
 	;	Peephole 135	removed redundant mov
 	orl	a,r%2
+}
+
+replace {
+	clr	a
+	mov	r%2,a
+	mov	a,r%3
+	orl	ar%5,a
+	mov	a,r%2
+	orl	ar%4,a
+} by {
+	; peephole 1362  removed orl with zero
+	clr	a
+	mov	r%2,a
+	mov	a,r%3
+	orl	ar%5,a
+	mov	a,r%2
 }
 
 replace restart {
@@ -2398,6 +2435,21 @@ replace {
 	mov	r%1,a
 	mov	%2,a
 }
+
+replace {
+	mov	a,%1
+	mov	r%2,a
+} by {
+	mov	r%2,%1
+} if notUsed('a'), notSame(%1 '@r0' '@r1' 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7')
+
+replace {
+	mov	a,%1
+	mov	r%2,a
+} by {
+	mov	ar%2,%1
+} if notUsed('a'), same(%1 '@r0' '@r1' 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7')
+
 
 // rules 179-182 provided by : Frieder <fe@lake.iup.uni-heidelberg.de>
 // saving 2 byte, 1 cycle
@@ -8544,7 +8596,7 @@ replace restart {
 // hoist loads of 'a' in the hope that it eliminate a reg-reg move.
 // FIXME: should also do that with arbitrary registers, but the peephole processing
 //        will loop.  need to do as a special pass
-replace start {
+replace {
 	%4	%1,%2
 	mov	a,%3
 } by {
@@ -8554,7 +8606,7 @@ replace start {
 } if operandsNotRelated('a' %1 %2 %3 'sp' '@r0' '@r1'), notVolatile(%3), operandsNotRelated(%4 'call' 'jmp' 'cjne' 'djnz' 'jc' 'jnc' 'jb' 'jnb' 'jbc' 'jz' 'jnz' 'ret')
 
 // hoist loads of 'a' in the hope that it eliminate a reg-reg move.
-replace start {
+replace {
 	%4	%1
 	mov	a,%3
 } by {
@@ -8562,6 +8614,28 @@ replace start {
 	mov	a,%3
 	%4	%1
 } if operandsNotRelated('a' %1 %3 'sp' '@r0' '@r1'), notVolatile(%3), same(%4 'inc' 'dec' 'clr')
+
+replace restart {
+	%1	a%3,#%2
+	mov	r%4,a
+	mov	a,%3
+} by {
+	; peephole 8571
+	mov	r%4,a
+	mov	a,%3
+	%1	a,#%2
+} if same(%1 'anl' 'orl' 'xrl'), same(%3 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), notUsed(%3), operandsNotRelated(%3 %4)
+
+replace restart {
+	mov	%2,#0x00
+	%4	%5,%6
+	mov	a,%2
+} by {
+	; peephole 8582
+	mov	%2,#0x00
+	%4	%5,%6
+	clr	a
+} if same(%2 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), operandsNotRelated('a' %2), operandsNotRelated(%2 %5 %6)
 
 // sink constant loads in the hope that they will combine with the operation
 // that uses them.  it oscillates with pattern 8131 and creates an infinite loop.
@@ -8614,6 +8688,51 @@ replace restart {
 	mov	r%1,a
 }
 
+replace {
+	%5	ar%3,#%1
+	mov	r%4,a
+	mov	a,r%3
+} by {
+	mov	r%4,a
+	%5	ar%3,#%1
+	mov	a,r%3
+} if same(%5 'anl' 'orl' 'xrl')
+
+
+// genCast bool -> uint16_t, simplify sign extend of high byte
+replace restart {
+	anl	ar%3,#0x01
+	mov	a,r%3
+	rlc	a
+	subb	a,acc
+} by {
+	; peephole 850
+	anl	ar%3,#0x01
+	clr	a
+} if notUsed('C')
+
+replace restart {
+	clr	a
+	rlc	a
+	mov	r%5,a
+	rlc	a
+	subb	a,acc
+	mov	r%4,a
+} by {
+	; peephole 8726
+	clr	a
+	rlc	a
+	mov	r%5,a
+	clr	a
+	mov	r%4,a
+} if notUsed('C')
+
+replace restart {
+	clr	a
+	mov	r%1,a
+} by {
+	mov	r%1,#0x00
+} if notUsed('a')
 
 // FIXME: this is repeated and shouldn't be needed. but it does catch addtional cases
 replace restart {
@@ -8792,6 +8911,101 @@ replace {
 } by {
 	; peephole 8496
 } if notUsed('a')
+
+// uint16_t x;
+// bool y;
+// (x << 1) | y
+replace restart {
+	clr	a
+	rlc	a
+	mov	r%3,a
+	mov	a,r%5
+	add	a,r%5
+	mov	r%5,a
+	mov	a,r%4
+	rlc	a
+	mov	r%4,a
+	mov	a,r%3
+	orl	ar%5,a
+} by {
+	; peephole 8931
+	mov	a,r%5
+	rlc	a
+	mov	r%5,a
+	mov	a,r%4
+	rlc	a
+	mov	r%4,a
+} if notUsed('a'), notUsed('C')
+
+
+// uint16_t x;
+// (x << 1) | (uint8_t)(y & 1)
+replace restart {
+	mov	a,r%5
+	add	a,r%5
+	mov	r%5,a
+	mov	a,r%4
+	rlc	a
+	mov	r%4,a
+	mov	a,r%3
+	anl	a,#0x01
+	orl	ar%5,a
+} by {
+	; peephole 8954
+	mov	a,r%3
+	rrc	a
+	mov	a,r%5
+	rlc	a
+	mov	r%5,a
+	mov	a,r%4
+	rlc	a
+	mov	r%4,a
+} if notUsed('a'), notUsed('C')
+
+// uint8_t x;
+// (x << 1) | (uint8_t)(y & 1)
+replace restart {
+	mov	a,r%5
+	add	a,r%5
+	mov	r%5,a
+	mov	a,r%4
+	anl	a,#0x01
+	orl	ar%5,a
+} by {
+	; peephole 8975
+	mov	a,r%4
+	rrc	a
+	mov	a,r%5
+	rlc	a
+	mov	r%5,a
+} if notUsed('a'), notUsed('C')
+
+replace restart {
+	mov	a,r%5
+	add	a,r%5
+	xch	a,r%7
+	anl	a,#0x01
+	orl	a,r%7
+} by {
+	; peephole 8990
+	mov	a,r%7
+	rrc	a
+	mov	a,r%5
+	rlc	a
+} if notUsed('C'), notUsed(%7)
+
+replace restart {
+	clr	a
+	rlc	a
+	mov	r%4,a
+	mov	a,r%5
+	add	a,r%5
+	orl	a,r%4
+} by {
+	; peephole 8997
+	mov	a,r%5
+	rlc	a
+} if notUsed('C')
 
 
 // hoist store of 'a' into register after computation
