@@ -173,6 +173,55 @@ replace {
 	mov	%6,a
 }
 
+replace restart {
+	clr	a
+	mov	%1,a
+	mov	r%4,#0x00
+} by {
+	clr	a
+	mov	%1,a
+	mov	r%4,a
+}
+
+replace restart {
+	clr	a
+	mov	%1,a
+	mov	r%4,#0x00
+	mov	r%5,#0x00
+} by {
+	clr	a
+	mov	%1,a
+	mov	r%4,a
+	mov	r%5,a
+}
+
+replace restart {
+	clr	a
+	mov	%1,a
+	mov	r%4,#0x00
+	mov	r%5,#0x00
+	mov	r%6,#0x00
+} by {
+	clr	a
+	mov	%1,a
+	mov	r%4,a
+	mov	r%5,a
+	mov	r%6,a
+}
+
+replace restart {
+	clr	a
+	mov	%1,a
+	mov	r%4,#0x00
+	mov	r%5,#0x00
+	mov	r%7,#0x00
+} by {
+	clr	a
+	mov	%1,a
+	mov	r%4,a
+	mov	r%5,a
+	mov	r%7,a
+}
 replace {
 	mov	%1,a
 	mov	dptr,#%2
@@ -1860,8 +1909,148 @@ replace restart {
 	add	a,#%2
 	mov	r0,a
 	mov	r1,a
-} if notUsed('a'), immdInRange(0 255 '+' 1 %1 %2)
+} if notUsed('a'), immdInRange(0 255 '+' 1 %1 %x2)
 
+replace restart {
+	add	a,#%1
+	mov	%2,a
+	inc	%2
+} by {
+	add	a,#%3
+	mov	%2,a
+} if notUsed('a'), notUsed('C'), immdInRange(0 255 '+' 1 %1 %x3)
+
+replace restart {
+	dec	r%0
+	mov	@r%0,#%1
+	inc	r%0
+	mov	@r%0,#%2
+} by {
+	mov	@r%0,#%2
+	dec	r%0
+	mov	@r%0,#%1
+	inc	r%0
+}
+
+replace restart {
+	add	a,#%1
+	mov	%2,a
+	mov	a,%4
+	inc	%2
+} by {
+	add	a,#%3
+	mov	%2,a
+	mov	a,%4
+} if notUsed('C'), immdInRange(0 255 '+' 1 %1 %x3), operandsNotRelated(%4 %2)
+
+replace restart {
+	mov	a,sp
+	add	a,#0xff
+	mov	r%0,a
+} by {
+	mov	r%0,sp
+	dec	r%0
+} if notUsed('a'), notUsed('C')
+
+replace restart {
+	mov	a,sp
+	add	a,#0xfe
+	mov	r%0,a
+} by {
+	mov	r%0,sp
+	dec	r%0
+	dec	r%0
+} if notUsed('a'), notUsed('C')
+
+replace restart {
+	mov	@r%0,#%1
+	inc	r%0
+	mov	@r%0,#%1
+} by {
+	mov	a,#%1
+	mov	@r%0,a
+	inc	r%0
+	mov	@r%0,a
+} if notUsed('a')
+
+replace restart {
+	mov	@r%0,#%1
+	dec	r%0
+	mov	@r%0,#%1
+} by {
+	mov	a,#%1
+	mov	@r%0,a
+	dec	r%0
+	mov	@r%0,a
+} if notUsed('a')
+
+replace restart {
+	mov	@r%0,#%1
+	inc	r%0
+	mov	@r%0,#%1
+	inc	r%0
+	mov	@r%0,#%1
+} by {
+	mov	a,#%1
+	mov	@r%0,a
+	inc	r%0
+	mov	@r%0,a
+	inc	r%0
+	mov	@r%0,a
+} if notUsed('a')
+
+replace restart {
+	mov	@r%0,#%1
+	dec	r%0
+	mov	@r%0,#%1
+	dec	r%0
+	mov	@r%0,#%1
+} by {
+	mov	a,#%1
+	mov	@r%0,a
+	dec	r%0
+	mov	@r%0,a
+	dec	r%0
+	mov	@r%0,a
+} if notUsed('a')
+
+replace restart {
+	mov	@r%0,#%1
+	inc	r%0
+	mov	@r%0,#%1
+	inc	r%0
+	mov	@r%0,#%1
+	inc	r%0
+	mov	@r%0,#%1
+} by {
+	mov	a,#%1
+	mov	@r%0,a
+	inc	r%0
+	mov	@r%0,a
+	inc	r%0
+	mov	@r%0,a
+	inc	r%0
+	mov	@r%0,a
+} if notUsed('a')
+
+replace restart {
+	mov	@r%0,#%1
+	dec	r%0
+	mov	@r%0,#%1
+	dec	r%0
+	mov	@r%0,#%1
+	dec	r%0
+	mov	@r%0,#%1
+} by {
+	mov	a,#%1
+	mov	@r%0,a
+	dec	r%0
+	mov	@r%0,a
+	dec	r%0
+	mov	@r%0,a
+	dec	r%0
+	mov	@r%0,a
+} if notUsed('a')
 
 // WTF? Doesn't look sensible to me...
 //replace {
@@ -1894,6 +2083,24 @@ replace restart {
 //	  sjmp %5
 //%4:
 //} if labelRefCount %4 1
+
+// same code size, but prefer branch-less
+replace restart {
+	mov	r%5,a
+	cjne	a,#0x01,%1
+	mov	a,r%5
+	sjmp	%2
+%1:
+	clr	a
+%2:
+} by {
+	mov	r%5,a
+	xrl	a,#0x01
+	add	a,#0xff
+	cpl	c
+	clr	a
+	rlc	a
+} if labelRefCountChange(%1 -1), labelRefCountChange(%2 -1), labelRefCount(%1 0), labelRefCount(%2 0)
 
 replace {
 	mov	r%1,a
@@ -2386,6 +2593,32 @@ replace {
 %3:
 } if labelRefCount(%3 4), labelRefCountChange(%3 -4), labelRefCountChange(%4 3)
 
+// could also allow different jump labels for the two 'cjne' but then
+// it doesn't have any means to check if r0/r1 is used in the path of the
+// first jump or not.
+replace restart {
+      	mov	ar%7,@%0
+      	cjne	r%6,%2,%9
+      	cjne	r%7,%4,%9
+} by {
+      	mov	ar%7,@%0
+      	cjne	r%6,%2,%9
+	cjne	@%0,%4,%9
+} if same(%0 'r0' 'r1'), operandsNotRelated(%0 %6 %7)
+
+replace restart {
+	mov	ar%3,@r%0
+	inc	r%0
+	cjne	r%3,%7,%9
+	cjne	@r%0,%8,%9
+} by {
+	mov	ar%3,@r%0
+	cjne	@r%0,%7,%9
+	inc	r%0
+	cjne	@r%0,%8,%9
+} if notUsed(%0), operandsNotRelated(%0 %3)
+
+
 replace {
 	mov	r%1,%2
 	clr	c
@@ -2661,6 +2894,29 @@ replace {
 	cpl	a
 	mov	%1,a
 } if notVolatile %1
+
+replace restart {
+	mov	a,r%6
+	jnz	%1
+	mov	r%6,#0x01
+%1:
+} by {
+	cjne	r%6,#0x00,%1
+	inc	r%6
+%1:
+} if notUsed('a')
+
+replace restart {
+	mov	a,r%6
+	jnz	%1
+	mov	r%6,#0x01
+%1:
+} by {
+	mov	a,r%6
+	jnz	%1
+	inc	r%6
+%1:
+}
 
 //replace {
 // acc being incremented might cause problems with register tracking
@@ -8194,6 +8450,24 @@ replace restart {
 	clr	a
 	subb	a,%1
 } if notUsed(%6), notUsed(%7)
+
+replace restart {
+	mov	r%2,a
+	movx	a,@dptr
+	mov	r%3,a
+	mov	a,r%2
+	add	a,%4
+	mov	r%2,a
+	mov	a,r%3
+	addc	a,%5
+	mov	r%3,a
+} by {
+	add	a,%4
+	mov	r%2,a
+	movx	a,@dptr
+	addc	a,%5
+	mov	r%3,a
+} if operandsNotRelated(%2 %3 %4 %5)
 
 // returning a 16-bit value through '(DPH << 8) | DPL' (from inline asm)
 // split up into several patterns to increase usefulness in other cases
