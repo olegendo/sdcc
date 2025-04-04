@@ -2102,6 +2102,57 @@ replace restart {
 	rlc	a
 } if labelRefCountChange(%1 -1), labelRefCountChange(%2 -1), labelRefCount(%1 0), labelRefCount(%2 0)
 
+// conditional move: reg = a == #0 ? #imm : #0
+// replace with same code length but branch-less.  the trailing anl also has
+// a chance to re-combine with the following insns.
+replace restart {
+	jz	%1
+	mov	r%5,#0x00
+	sjmp	%2
+%1:
+	mov	r%5,#%7
+%2:
+} by {
+	; peephole 2114
+	add	a,#0xff
+	cpl	c
+	subb	a,acc
+	anl	a,#%7
+	mov	r%5,a
+} if notUsed('C'), notUsed('a'), labelRefCountChange(%1 -1), labelRefCountChange(%2 -1), labelRefCount(%1 0), labelRefCount(%2 0)
+
+replace restart {
+	anl	a,#0xff
+} by {
+	; peephole 2125
+}
+
+replace restart {
+	anl	a,#0x00
+} by {
+	; peephole 2131
+	clr	a
+}
+
+replace restart {
+	orl	a,#0x00
+} by {
+	; peephole 2138
+}
+
+replace restart {
+	xrl	a,#0x00
+} by {
+	; peephole 2144
+}
+
+replace restart {
+	xrl	a,#0xff
+} by {
+	; peephole 2150
+	cpl	a
+}
+
 replace {
 	mov	r%1,a
 	anl	ar%1,%2
