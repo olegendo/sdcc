@@ -5449,6 +5449,15 @@ replace restart {
 	djnz	%1,%2
 } if notUsed('C'), notSame(%1 'a'), notSame(%1 'acc')
 
+replace restart {
+	mov	a,%1
+	dec	a
+	mov	%1,a
+	jnz	%2
+} by {
+	djnz	%1,%2
+}  if notUsed('a'), notUsed('C'), notVolatile(%1), notSame(%1 'a' 'acc' '@r0' '@r1')
+
 
 // applies to f.e. funptrs.c
 // saves one byte if %1 is a register or @register
