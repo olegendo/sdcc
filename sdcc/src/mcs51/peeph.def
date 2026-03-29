@@ -6644,6 +6644,35 @@ replace restart {
 	dec	sp
 } if same(%1 'r0' 'r1' 'r2' 'r3' 'r4' 'r5' 'r6' 'r7'), notUsed(%1)
 
+// merge multiple "dec sp" into a fixed number of insns, if the acc register is free.
+replace {
+	dec	sp
+	dec	sp
+	dec	sp
+} by {
+	mov	a,sp
+	add	a,#0xfd
+	mov	sp,a
+} if notUsed('a'), notUsed('C')
+
+replace {
+	mov	a,sp
+	add	a,#%1
+	mov	sp,a
+	dec	sp
+} by {
+	mov	a,sp
+	add	a,#%2
+	mov	sp,a
+} if notUsed('a'), notUsed('C'), immdInRange(0 255 '-' %1 1 %x2)
+
+// this can also result in multiple "add  a,#imm" insns, combine them into a single one
+replace {
+	add	a,#%1
+	add	a,#%2
+} by {
+	add	a,#%4
+} if immdInRange(0 512 '+' %1 %2 %3), immdInRange(0 255 '&' %3 255 %x4)
 
 replace restart {
 	push	ar%1
