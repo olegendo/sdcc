@@ -7276,6 +7276,141 @@ replace {
 } if notUsed('a')
 
 replace {
+	mov	a,#0x80
+	xrl	a,%2
+	jz	%3
+} by {
+	mov	a,%2
+	jb	acc.7,%3
+} if notUsed('a')
+
+replace {
+	mov	a,#0x80
+	xrl	a,%2
+	jnz	%3
+} by {
+	mov	a,%2
+	jnb	acc.7,%3
+} if notUsed('a')
+
+replace {
+	mov	a,#0x40
+	xrl	a,%2
+	jz	%3
+} by {
+	mov	a,%2
+	jb	acc.6,%3
+} if notUsed('a')
+
+replace {
+	mov	a,#0x20
+	xrl	a,%2
+	jnz	%3
+} by {
+	mov	a,%2
+	jnb	acc.5,%3
+} if notUsed('a')
+
+replace {
+	mov	a,#0x20
+	xrl	a,%2
+	jz	%3
+} by {
+	mov	a,%2
+	jb	acc.5,%3
+} if notUsed('a')
+
+replace {
+	mov	a,#0x10
+	xrl	a,%2
+	jz	%3
+} by {
+	mov	a,%2
+	jb	acc.4,%3
+} if notUsed('a')
+
+replace {
+	mov	a,#0x10
+	xrl	a,%2
+	jnz	%3
+} by {
+	mov	a,%2
+	jnb	acc.4,%3
+} if notUsed('a')
+
+replace {
+	mov	a,#0x08
+	xrl	a,%2
+	jz	%3
+} by {
+	mov	a,%2
+	jb	acc.3,%3
+} if notUsed('a')
+
+replace {
+	mov	a,#0x08
+	xrl	a,%2
+	jnz	%3
+} by {
+	mov	a,%2
+	jnb	acc.3,%3
+} if notUsed('a')
+
+replace {
+	mov	a,#0x04
+	xrl	a,%2
+	jz	%3
+} by {
+	mov	a,%2
+	jb	acc.2,%3
+} if notUsed('a')
+
+replace {
+	mov	a,#0x04
+	xrl	a,%2
+	jnz	%3
+} by {
+	mov	a,%2
+	jnb	acc.2,%3
+} if notUsed('a')
+
+replace {
+	mov	a,#0x02
+	xrl	a,%2
+	jz	%3
+} by {
+	mov	a,%2
+	jb	acc.1,%3
+} if notUsed('a')
+
+replace {
+	mov	a,#0x02
+	xrl	a,%2
+	jnz	%3
+} by {
+	mov	a,%2
+	jnb	acc.1,%3
+} if notUsed('a')
+
+replace {
+	mov	a,#0x01
+	xrl	a,%2
+	jz	%3
+} by {
+	mov	a,%2
+	jb	acc.0,%3
+} if notUsed('a')
+
+replace {
+	mov	a,#0x01
+	xrl	a,%2
+	jnz	%3
+} by {
+	mov	a,%2
+	jnb	acc.0,%3
+} if notUsed('a')
+
+replace {
 	jb	%1,%2
 	sjmp	%5
 %2:
