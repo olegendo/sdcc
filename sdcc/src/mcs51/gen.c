@@ -848,7 +848,12 @@ aopForSym (iCode * ic, symbol * sym, bool result)
       sym->aop = aop = newAsmop (AOP_IMMD);
       aop->aopu.aop_immd.aop_immd1 = Safe_strdup (sym->rname);
       aop->size = getSize (sym->type);
-      aop->aop_litimmd_is_gptr = (aop->size == GPTRSIZE && (IS_GENPTR (sym->type) || IFFUNC_ISBANKEDCALL (sym->type)));
+
+      // for non-banked function symbol the size will be 2 (regular code-ptr).
+      // however, when casting it to a gpptr we have to allow aopGet to read
+      // beyond the size to get the correct high byte.
+      // hence always set aop_litimmd_is_gptr.
+      aop->aop_litimmd_is_gptr = true;
       aop->aop_is_volatile = IS_VOLATILE (sym->type);
       return aop;
     }
@@ -908,6 +913,16 @@ aopForRemat (symbol *sym)
         }
     }
 
+  if (ic && ic->op == ADDRESS_OF
+      && DCL_TYPE (operandType (IC_RESULT (ic))) == CPOINTER)
+    {
+      // when taking the address of something that would result in a CPOINTER
+      // allow it to be treated like an gptr (3 bytes).  when it's converted
+      // into a real gptr or 3+ byte integer it will preserve the top
+      // byte (code bank address) in aopGet.
+      aop->aop_litimmd_is_gptr = 1;
+    }
+
   dbuf_init (&dbuf, 128);
   if (val)
     {
@@ -924,7 +939,13 @@ aopForRemat (symbol *sym)
     {
       ptr_type = pointerTypeToGPByte (DCL_TYPE (from_type), from_name, sym->name);
       dbuf_init (&dbuf, 128);
-      dbuf_tprintf (&dbuf, "#!constbyte", (unsigned)ptr_type);
+
+      // if it's a CPOINTER use the symbol name to preserve the top byte.
+      if (ptr_type == GPTYPE_CODE)
+        dbuf_printf (&dbuf, "#(%s >> 16) + 0x80", aop->aopu.aop_immd.aop_immd1);
+      else
+        dbuf_tprintf (&dbuf, "#!constbyte", (unsigned)ptr_type);
+
       aop->aopu.aop_immd.aop_immd2 = dbuf_detach_c_str (&dbuf);
     }
 
@@ -1136,7 +1157,9 @@ aopOp (operand *op, iCode *ic, bool result)
         {
           sym->aop = op->aop = aop = aopForRemat (sym);
           aop->size = operandSize (op);
-          aop->aop_litimmd_is_gptr = (aop->size == GPTRSIZE && (IS_GENPTR (sym->type) || IFFUNC_ISBANKEDCALL (sym->type)));
+
+          // n.b. aopForRemat might have already set aop_litimmd_is_gptr.
+          aop->aop_litimmd_is_gptr |= (aop->size == GPTRSIZE && (IS_GENPTR (sym->type) || IFFUNC_ISBANKEDCALL (sym->type)));
           return;
         }
 
@@ -1644,9 +1667,10 @@ aopGet (asmop *aop, int offset, bool bit16, bool dname)
       dbuf_init (&dbuf, 128);
     }
 
-  /* offset is greater than
-     size then zero */
-  if (offset > (aop->size - 1) && aop->type != AOP_LIT)
+  // if offset is greater than size, then return zero usually.
+  // if it was an immediate that would normally go into a gptr, but was truncated
+  // to a 2-byte code-pointer, allow requesting the highest byte of the immediate anyway.
+  if (offset > (aop->size - 1) && aop->type != AOP_LIT && !aop->aop_litimmd_is_gptr)
     {
       dbuf_append_str (&dbuf, zero);
     }
@@ -1708,7 +1732,10 @@ aopGet (asmop *aop, int offset, bool bit16, bool dname)
             }
           else if (offset)
             {
-              dbuf_printf (&dbuf, "#(%s >> %d)", aop->aopu.aop_immd.aop_immd1, offset * 8);
+              // if it's a symbol in the code/rodata then the pointer is 3 bytes
+              // and byte 2 has bit 7 set to indicate the code/rodata pointer type.
+              dbuf_printf (&dbuf, "#(%s >> %d)%s", aop->aopu.aop_immd.aop_immd1, offset * 8,
+                           offset == (GPTRSIZE - 1) ? " + 0x80" : "");
             }
           else
             {
@@ -5695,17 +5722,17 @@ adjustArithmeticResult (iCode * ic)
           IC_RIGHT (ic) && AOP_SIZE (IC_RIGHT (ic)) < GPTRSIZE &&
           !sameRegs (AOP (IC_RESULT (ic)), AOP (IC_LEFT (ic))) && !sameRegs (AOP (IC_RESULT (ic)), AOP (IC_RIGHT (ic))))
         {
-          dbuf_printf (&dbuf, "#0x%02x", pointerTypeToGPByte (pointerCode (getSpec (operandType (IC_LEFT (ic)))), NULL, NULL));
+          dbuf_printf (&dbuf, "#CCC 0x%02x", pointerTypeToGPByte (pointerCode (getSpec (operandType (IC_LEFT (ic)))), NULL, NULL));
           opPut (IC_RESULT (ic), dbuf_c_str (&dbuf), GPTRSIZE - 1);
         }
       else if (IC_LEFT (ic) && AOP_SIZE (IC_LEFT (ic)) < GPTRSIZE && !sameRegs (AOP (IC_RESULT (ic)), AOP (IC_LEFT (ic))))
         {
-          dbuf_printf (&dbuf, "#0x%02x", pointerTypeToGPByte (pointerCode (getSpec (operandType (IC_LEFT (ic)))), NULL, NULL));
+          dbuf_printf (&dbuf, "#DDD 0x%02x", pointerTypeToGPByte (pointerCode (getSpec (operandType (IC_LEFT (ic)))), NULL, NULL));
           opPut (IC_RESULT (ic), dbuf_c_str (&dbuf), GPTRSIZE - 1);
         }
       else if (IC_RIGHT (ic) && AOP_SIZE (IC_RIGHT (ic)) < GPTRSIZE && !sameRegs (AOP (IC_RESULT (ic)), AOP (IC_RIGHT (ic))))
         {
-          dbuf_printf (&dbuf, "#0x%02x", pointerTypeToGPByte (pointerCode (getSpec (operandType (IC_RIGHT (ic)))), NULL, NULL));
+          dbuf_printf (&dbuf, "#EEE 0x%02x", pointerTypeToGPByte (pointerCode (getSpec (operandType (IC_RIGHT (ic)))), NULL, NULL));
           opPut (IC_RESULT (ic), dbuf_c_str (&dbuf), GPTRSIZE - 1);
         }
       dbuf_destroy (&dbuf);
@@ -12312,7 +12339,7 @@ genAddrOf (iCode * ic)
       struct dbuf_s dbuf;
 
       dbuf_init (&dbuf, 128);
-      dbuf_printf (&dbuf, "#0x%02x", pointerTypeToGPByte (pointerCode (getSpec (operandType (IC_LEFT (ic)))), NULL, NULL));
+      dbuf_printf (&dbuf, "#FFF 0x%02x", pointerTypeToGPByte (pointerCode (getSpec (operandType (IC_LEFT (ic)))), NULL, NULL));
       opPut(IC_RESULT (ic), dbuf_c_str (&dbuf), GPTRSIZE - 1);
       dbuf_destroy (&dbuf);
     }
@@ -12698,12 +12725,19 @@ genCast (iCode * ic)
               }
             else
               {
-                struct dbuf_s dbuf;
+                // if it's a pointer to code/rodata preserve the high byte (for offset = 2).
+                // let opGet handle it.
 
-                dbuf_init (&dbuf, 128);
-                dbuf_printf (&dbuf, "#0x%02x", gpVal);
-                opPut(result, dbuf_c_str (&dbuf), GPTRSIZE - 1);
-                dbuf_destroy (&dbuf);
+                if (gpVal == GPTYPE_CODE)
+                  opPut(result, opGet (right, offset, FALSE, FALSE), offset);
+                else
+                  {
+                    struct dbuf_s dbuf;
+                    dbuf_init (&dbuf, 128);
+                    dbuf_printf (&dbuf, "#0x%02x", gpVal);
+                    opPut(result, dbuf_c_str (&dbuf), GPTRSIZE - 1);
+                    dbuf_destroy (&dbuf);
+                  }
               }
           }
 

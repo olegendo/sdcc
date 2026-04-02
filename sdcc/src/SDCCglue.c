@@ -844,8 +844,17 @@ printGPointerType (struct dbuf_s *oBuf, const char *iname, const char *oname, in
     }
   else
     {
+      // the following works only for little-endian
+      wassert (port->little_endian);
+
       _printPointerType (oBuf, iname, size);
-      dbuf_printf (oBuf, ",#0x%02x\n", byte);
+
+      // if it's a pointer to code/rodata preserve the highest byte.
+      // otherwise output a fixed value high byte that encodes the pointer type.
+      if (TARGET_MCS51_LIKE && byte == GPTYPE_CODE)
+          dbuf_printf (oBuf, ", (%s >> 16) + 0x80\n", iname);
+      else
+          dbuf_printf (oBuf, ", #0x%02x\n", byte);
     }
 }
 
@@ -1629,7 +1638,7 @@ printIvalCharPtr (symbol *sym, sym_link *type, value *val, struct dbuf_s *oBuf)
                 {
                   dbuf_printf (oBuf, "\t.byte %s,%s,%s", aopLiteral (val, 0), aopLiteral (val, 1), aopLiteral (val, 2));
                   if (IS_PTR (val->type) && !IS_GENPTR (val->type))
-                    dbuf_tprintf (oBuf, ",!immedbyte\n", pointerTypeToGPByte (DCL_TYPE (val->type), val->name, sym->name));
+                    dbuf_tprintf (oBuf, ",AAAA4 !immedbyte\n", pointerTypeToGPByte (DCL_TYPE (val->type), val->name, sym->name));
                   else
                     dbuf_printf (oBuf, ",%s\n", aopLiteral (val, 3));
                 }
@@ -1737,7 +1746,7 @@ printIvalPtr (symbol *sym, sym_link *type, initList *ilist, struct dbuf_s *oBuf)
           if (IS_GENPTR (val->type))
             dbuf_printf (oBuf, ",%s\n", aopLiteral (val, 2));
           else if (IS_PTR (val->type))
-            dbuf_tprintf (oBuf, ",!immedbyte\n", pointerTypeToGPByte (DCL_TYPE (val->type), val->name, sym->name));
+            dbuf_tprintf (oBuf, ",AAAA5 !immedbyte\n", pointerTypeToGPByte (DCL_TYPE (val->type), val->name, sym->name));
           else
             dbuf_printf (oBuf, ",%s\n", aopLiteral (val, 2));
           break;
