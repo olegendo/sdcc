@@ -56,9 +56,12 @@ aopLiteralGptr (const char *name, const value *val)
   v >>= ((GPTRSIZE - 1) * 8);
 
   if (IS_FUNCPTR (val->type))
-    dbuf_tprintf (&dbuf, "!immedbyte", v | pointerTypeToGPByte (DCL_TYPE (val->type->next), val->name, name));
+    dbuf_tprintf (&dbuf, "!immedbyte", (unsigned int) ((v | pointerTypeToGPByte (DCL_TYPE (val->type->next), val->name, name)) & 0xff));
   else if (IS_PTR (val->type) && !IS_GENPTR (val->type))
-    dbuf_tprintf (&dbuf, "!immedbyte", pointerTypeToGPByte (DCL_TYPE (val->type), val->name, name));
+    // OR in the literal's own high byte like the function-pointer case above,
+    // so bank bits of a 3-byte typed pointer literal survive.  for the usual
+    // 2-byte data pointers the front end has already masked the value, so v is 0.
+    dbuf_tprintf (&dbuf, "!immedbyte", (unsigned int) ((v | pointerTypeToGPByte (DCL_TYPE (val->type), val->name, name)) & 0xff));
   else
     dbuf_tprintf (&dbuf, "!immedbyte", (unsigned int) v & 0xff);
 
@@ -844,8 +847,17 @@ printGPointerType (struct dbuf_s *oBuf, const char *iname, const char *oname, in
     }
   else
     {
+      // the following works only for little-endian
+      wassert (port->little_endian);
+
       _printPointerType (oBuf, iname, size);
-      dbuf_printf (oBuf, ",#0x%02x\n", byte);
+
+      // if it's a pointer to code/rodata preserve the highest byte.
+      // otherwise output a fixed value high byte that encodes the pointer type.
+      if (TARGET_MCS51_LIKE && byte == GPTYPE_CODE)
+          dbuf_printf (oBuf, ", #(%s + 0x800000) >> 16\n", iname);
+      else
+          dbuf_printf (oBuf, ", #0x%02x\n", byte);
     }
 }
 
@@ -1629,7 +1641,7 @@ printIvalCharPtr (symbol *sym, sym_link *type, value *val, struct dbuf_s *oBuf)
                 {
                   dbuf_printf (oBuf, "\t.byte %s,%s,%s", aopLiteral (val, 0), aopLiteral (val, 1), aopLiteral (val, 2));
                   if (IS_PTR (val->type) && !IS_GENPTR (val->type))
-                    dbuf_tprintf (oBuf, ",!immedbyte\n", pointerTypeToGPByte (DCL_TYPE (val->type), val->name, sym->name));
+                    dbuf_tprintf (oBuf, ",AAAA4 !immedbyte\n", pointerTypeToGPByte (DCL_TYPE (val->type), val->name, sym->name));
                   else
                     dbuf_printf (oBuf, ",%s\n", aopLiteral (val, 3));
                 }
@@ -1737,7 +1749,15 @@ printIvalPtr (symbol *sym, sym_link *type, initList *ilist, struct dbuf_s *oBuf)
           if (IS_GENPTR (val->type))
             dbuf_printf (oBuf, ",%s\n", aopLiteral (val, 2));
           else if (IS_PTR (val->type))
-            dbuf_tprintf (oBuf, ",!immedbyte\n", pointerTypeToGPByte (DCL_TYPE (val->type), val->name, sym->name));
+            {
+              // use the same gp-byte computation as the char-pointer path,
+              // which also handles banked function-pointer literals by
+              // preserving the literal's own high byte.
+              if (TARGET_MCS51_LIKE)
+                dbuf_printf (oBuf, ",%s\n", aopLiteralGptr (sym->name, val));
+              else
+                dbuf_tprintf (oBuf, ",!immedbyte\n", pointerTypeToGPByte (DCL_TYPE (val->type), val->name, sym->name));
+            }
           else
             dbuf_printf (oBuf, ",%s\n", aopLiteral (val, 2));
           break;

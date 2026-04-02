@@ -5297,7 +5297,14 @@ decorateType (ast *tree, RESULT_TYPE resultType, bool reduceTypeAllowed)
               unsigned long long gpVal = 0;
               int size = getSize(LTYPE (tree));
               unsigned long long mask = (size >= sizeof(long long)) ? 0xffffffffffffffffull : (1ull << (size * 8)) - 1;
-              unsigned long long pVal = ullFromVal (valFromType (RTYPE (tree))) & mask;
+              unsigned long long fullVal = ullFromVal (valFromType (RTYPE (tree)));
+              unsigned long long pVal = fullVal & mask;
+
+              // warn if the literal has high bits the pointer type cannot hold,
+              // e.g. a banked code address cast to a plain 2-byte code pointer.
+              // an all-ones high part is just sign extension (e.g. (void *)-1).
+              if ((fullVal & ~mask) != 0 && (fullVal & ~mask) != ~mask)
+                werrorfl (tree->filename, tree->lineno, W_TRUNCATION);
 
               /* if casting literal specific pointer to generic pointer */
               if (IS_GENPTR (LTYPE (tree)) && IS_PTR (RTYPE (tree)) && !IS_GENPTR (RTYPE (tree)))

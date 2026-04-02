@@ -1512,8 +1512,16 @@ optimizeNarrowOpNet (iCode *ic)
             DCL_TYPE (newtype) = PPOINTER;
           else if (gpbyte == GPTYPE_FAR)
             DCL_TYPE (newtype) = FPOINTER;
-          else if (gpbyte == GPTYPE_CODE)
-            DCL_TYPE (newtype) = CPOINTER;
+
+          else if (gpbyte & GPTYPE_CODE)
+            {
+              // if the gpbyte is set to something else than the plain
+              // byte, there must be a reason for it.  it could have been a
+              // user generated pointer.  do not narrow it to a CPOINTER,
+              // as this will replace the gpbyte with GPTYPE_CODE (0x80).
+              if (gpbyte == GPTYPE_CODE)
+                DCL_TYPE (newtype) = CPOINTER;
+            }
           else
             {
               std::cerr << "Odd gpbyte " << std::hex << gpbyte << "\n";
