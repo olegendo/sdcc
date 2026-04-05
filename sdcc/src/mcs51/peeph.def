@@ -438,7 +438,7 @@ replace {
 %2:
 } if labelInRange(%5), labelRefCountChange(%2 -1)
 
-replace {
+replace restart {
 	ljmp	%5
 %1:
 } by {
@@ -447,7 +447,7 @@ replace {
 %1:
 } if labelInRange(%5)
 
-replace {
+replace restart {
 	ljmp	%5
 } by {
 	;	Peephole 112.c	changed ljmp to sjmp
