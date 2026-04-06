@@ -3927,7 +3927,7 @@ genCall (iCode * ic)
                             OP_SYMBOL (IC_LEFT (ic))->rname : OP_SYMBOL (IC_LEFT (ic))->name);
               emitcode ("mov", "r0,#%s", name);
               emitcode ("mov", "r1,#(%s >> 8)", name);
-              emitcode ("mov", "r2,#(%s >> 16)", name);
+              emitcode ("mov", "r2,#((%s + 0x800000) >> 16)", name);
             }
           emitcode (call, "__sdcc_banked_call");
         }
