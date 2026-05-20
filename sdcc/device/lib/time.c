@@ -67,7 +67,7 @@ const const char *const __month[]={"Jan","Feb","Mar","Apr","May","Jun",
 
 const const char *const __day[]={"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
 
-static char ascTimeBuffer[32];
+static char ascTimeBuffer[26];
 
 // validate the tm structure
 static void CheckTime(struct tm *timeptr) {
@@ -92,12 +92,13 @@ static void CheckTime(struct tm *timeptr) {
 }
 
 // format the time into "Sat Feb 17 17:45:23 2001\n"
-char *asctime(struct tm *timeptr) {
-  CheckTime(timeptr);
-  sprintf (ascTimeBuffer, "%s %s %2d %02d:%02d:%02d %04d\n",
-	   __day[timeptr->tm_wday], __month[timeptr->tm_mon], timeptr->tm_mday,
-	   timeptr->tm_hour, timeptr->tm_min, timeptr->tm_sec, 
-	   timeptr->tm_year+1900);
+char* asctime (struct tm* timeptr)
+{
+  CheckTime (timeptr);
+  sprintf (ascTimeBuffer, "%s %s %2d ", __day[timeptr->tm_wday], __month[timeptr->tm_mon], timeptr->tm_mday);
+  sprintf (ascTimeBuffer+11, "%02d:%02d:%02d ", timeptr->tm_hour, timeptr->tm_min, timeptr->tm_sec);
+  sprintf (ascTimeBuffer+11+9, "%04d\n", timeptr->tm_year+1900);
+
   return ascTimeBuffer;
 }
 
