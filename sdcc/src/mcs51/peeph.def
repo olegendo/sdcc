@@ -386,7 +386,7 @@ replace {
 } by {
 	;	Peephole 107	removed redundant ljmp
 %1:
-} if labelRefCountChange(%1 -1)
+} if labelRefCount(%1 1), labelRefCountChange(%1 -1)
 
 replace {
 	jc	%1
@@ -3463,13 +3463,16 @@ replace {
 %3:
 } if labelInRange(%5), labelRefCount(%3 1), labelRefCountChange(%3 -1)
 
+// caution, this sjmp could be part of a jump table
+// -> genJumpTab should mark all emitted jumptable lines as "jumptable" and
+//    peephole optimizer should not touch these lines at all
 replace {
 	sjmp	%1
 %1:
 } by {
 	;	Peephole 200.a	removed redundant sjmp
 %1:
-} if labelRefCountChange(%1 -1)
+} if labelRefCount(%1 1), labelRefCountChange(%1 -1)
 
 replace {
 	sjmp	%1
@@ -3479,7 +3482,7 @@ replace {
 	;	Peephole 200.b	removed redundant sjmp
 %2:
 %1:
-} if labelRefCountChange(%1 -1)
+} if labelRefCount(%1 1), labelRefCountChange(%1 -1)
 
 replace {
 	push	acc
